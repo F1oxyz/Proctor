@@ -65,7 +65,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
         <!-- Título -->
         <div class="mb-6">
           <h1 class="text-xl font-semibold text-slate-800">
-            {{ esEdicion() ? 'Editar Examen' : 'Create New Exam' }}
+            {{ esEdicion() ? 'Editar Examen' : 'Crear Nuevo Examen' }}
           </h1>
           <p class="text-sm text-slate-500 mt-1">
             Configura los detalles y diseña las preguntas para la evaluación.
@@ -80,22 +80,23 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
             <!-- ── Sección Detalles del Examen ────────── -->
             <div class="bg-white rounded-xl border border-gray-100 p-5 flex flex-col gap-4">
               <div class="flex items-center gap-2 mb-1">
-                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"/>
-                </svg>
-                <h2 class="text-sm font-semibold text-slate-700">Exam Details</h2>
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+                <h2 class="text-sm font-semibold text-slate-700">Detalles del Examen</h2>
               </div>
 
               <!-- Título + Tiempo en grid -->
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <!-- Título del examen -->
                 <div class="md:col-span-2 flex flex-col gap-1.5">
-                  <label for="titulo" class="text-xs font-medium text-slate-600">Exam Title</label>
+                  <label for="titulo" class="text-xs font-medium text-slate-600">Título del Examen</label>
                   <input
                     id="titulo"
                     type="text"
                     formControlName="titulo"
-                    placeholder="e.g., Introduction to Physics Final Term"
+                    placeholder="ej: Examen Final de Física I"
                     class="w-full px-3 py-2.5 text-sm border rounded-lg text-slate-800
                            placeholder-slate-400 focus:outline-none focus:ring-2
                            focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
@@ -110,7 +111,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                 <!-- Tiempo límite -->
                 <div class="flex flex-col gap-1.5">
                   <label for="duracion" class="text-xs font-medium text-slate-600">
-                    Time Limit (minutes)
+                    Límite de Tiempo (minutos)
                   </label>
                   <div class="relative">
                     <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -139,7 +140,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
 
               <!-- Selector de grupo -->
               <div class="flex flex-col gap-1.5">
-                <label for="grupo" class="text-xs font-medium text-slate-600">Select Group</label>
+                <label for="grupo" class="text-xs font-medium text-slate-600">Seleccionar Grupo</label>
                 <select
                   id="grupo"
                   formControlName="grupo_id"
@@ -150,9 +151,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                   [class.border-gray-200]="!campoInvalido('grupo_id')"
                 >
                   <option value="">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87"/>
-                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0065e0"><path d="M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z"/></svg>
                     Seleccionar Grupo
                   </option>
                   @for (grupo of gruposService.grupos(); track grupo.id) {
@@ -167,13 +166,13 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
               <!-- Descripción opcional -->
               <div class="flex flex-col gap-1.5">
                 <label for="descripcion" class="text-xs font-medium text-slate-600">
-                  Description <span class="text-slate-400">(Optional)</span>
+                  Descripción <span class="text-slate-400">(Opcional)</span>
                 </label>
                 <textarea
                   id="descripcion"
                   formControlName="descripcion"
                   rows="3"
-                  placeholder="Add instructions or details about this exam..."
+                  placeholder="Agrega instrucciones o detalles sobre este examen..."
                   class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg
                          text-slate-800 placeholder-slate-400 resize-none
                          focus:outline-none focus:ring-2 focus:ring-blue-500/20
@@ -186,7 +185,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
             <div class="flex flex-col gap-4">
               <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-slate-700">
-                  Questions
+                  Preguntas
                   <span class="ml-1.5 text-slate-400 font-normal">
                     Total: {{ preguntas().length }}
                   </span>
@@ -215,7 +214,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/>
                 </svg>
-                Add Another Question
+                Añadir Otra Pregunta
               </button>
             </div>
 
@@ -237,9 +236,9 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
             <div class="bg-white rounded-xl border border-gray-100 px-5 py-4
                         flex items-center justify-between">
               <div>
-                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">STATUS</p>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">ESTADO</p>
                 <p class="text-xs text-slate-400">
-                  {{ esEdicion() ? 'Editando examen existente' : 'Draft - Unsaved changes' }}
+                  {{ esEdicion() ? 'Editando examen existente' : 'Borrador - Cambios sin guardar' }}
                 </p>
               </div>
               <div class="flex items-center gap-3">
@@ -249,7 +248,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                   class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800
                          hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
                 >
-                  Cancel
+                  Cancelar
                 </button>
                 <app-btn
                   variante="primary"
@@ -259,7 +258,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
                   </svg>
-                  Save Exam
+                  Guardar Examen
                 </app-btn>
               </div>
             </div>

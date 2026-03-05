@@ -68,10 +68,6 @@ import { EstadoSesion } from '../../models/sesion.model';
                    text-slate-600 hover:text-slate-800 hover:bg-gray-50 transition-colors"
             ariaCurrentWhenActive="page"
           >
-            <!-- Ícono grupo -->
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87M15 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-            </svg>
             Mis Grupos
           </a>
 
@@ -82,10 +78,6 @@ import { EstadoSesion } from '../../models/sesion.model';
                    text-slate-600 hover:text-slate-800 hover:bg-gray-50 transition-colors"
             ariaCurrentWhenActive="page"
           >
-            <!-- Ícono exámenes -->
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-            </svg>
             Mis Exámenes
           </a>
         </div>

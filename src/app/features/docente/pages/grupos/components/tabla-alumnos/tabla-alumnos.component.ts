@@ -99,53 +99,32 @@ const ALUMNOS_POR_PAGINA = 5;
                     }
                   </td>
 
-                  <!-- Acciones: dropdown con opciones -->
+                  <!-- Acciones: botones directos -->
                   <td class="px-4 py-3 text-right">
-                    <div class="relative inline-block">
+                    <div class="flex items-center justify-end gap-1">
                       <button
                         type="button"
-                        (click)="toggleMenu(alumno.id)"
-                        class="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-gray-100 transition-colors cursor-pointer"
-                        aria-label="Más opciones"
-                        title="Más opciones"
+                        (click)="onEditarAlumno(alumno)"
+                        class="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                        aria-label="Editar"
+                        title="Editar"
                       >
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
 
-                      @if (menuAbiertoId() === alumno.id) {
-                        <!-- Overlay para cerrar al hacer clic afuera -->
-                        <div
-                          class="fixed inset-0 z-10"
-                          (click)="cerrarMenu()"
-                        ></div>
-
-                        <!-- Dropdown -->
-                        <div class="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
-                          <button
-                            type="button"
-                            (click)="onEditarAlumno(alumno); cerrarMenu()"
-                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                          >
-                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Editar nombre
-                          </button>
-                          <div class="border-t border-slate-100 my-1"></div>
-                          <button
-                            type="button"
-                            (click)="onEliminarAlumno(alumno); cerrarMenu()"
-                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Eliminar alumno
-                          </button>
-                        </div>
-                      }
+                      <button
+                        type="button"
+                        (click)="onEliminarAlumno(alumno)"
+                        class="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                        aria-label="Eliminar"
+                        title="Eliminar"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   </td>
 
@@ -212,19 +191,17 @@ const ALUMNOS_POR_PAGINA = 5;
 })
 export class TablaAlumnosComponent {
   // ── Inputs ─────────────────────────────────────────────
-  alumnos    = input.required<Alumno[]>();
+  alumnos = input.required<Alumno[]>();
   grupoNombre = input<string>('');
 
   // ── Outputs ────────────────────────────────────────────
-  editarAlumno   = output<Alumno>();
+  editarAlumno = output<Alumno>();
   eliminarAlumno = output<Alumno>();
 
   // ── Estado interno ─────────────────────────────────────
   // Bug 8: convertido a signal para que computed() lo rastree
   readonly busqueda = signal('');
   readonly paginaActual = signal(1);
-  /** ID del alumno cuyo menú está abierto, null si ninguno */
-  readonly menuAbiertoId = signal<string | null>(null);
 
   // ── Computed ───────────────────────────────────────────
 
@@ -277,14 +254,7 @@ export class TablaAlumnosComponent {
     }
   }
 
-  // Bug 9: manejo del menú de acciones
-  toggleMenu(alumnoId: string): void {
-    this.menuAbiertoId.update((id) => (id === alumnoId ? null : alumnoId));
-  }
-
-  cerrarMenu(): void {
-    this.menuAbiertoId.set(null);
-  }
+  // Acciones (emiten outputs al padre)
 
   onEditarAlumno(alumno: Alumno): void {
     this.editarAlumno.emit(alumno);
