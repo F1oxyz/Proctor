@@ -523,6 +523,64 @@ export class ExamenActivoService {
     return resultado;
   }
 
+  /**
+   * Recupera el resultado de Supabase usando el ID de sesion_alumnos.
+   * Se usa cuando el alumno recarga la página en /resultado.
+   */
+  async recuperarResultado(sesionAlumnoId: string): Promise<void> {
+    const { data } = await this.supabase.client
+      .from('sesion_alumnos')
+      .select('id, porcentaje, total_correctas, total_incorrectas, tiempo_usado_min')
+      .eq('id', sesionAlumnoId)
+      .single();
+
+    if (!data) return;
+
+    this.resultadoFinal.set({
+      porcentaje:           data.porcentaje         ?? 0,
+      total_correctas:      data.total_correctas    ?? 0,
+      total_incorrectas:    data.total_incorrectas  ?? 0,
+      total_sin_contestar:  0,
+      tiempo_usado_seg:     (data.tiempo_usado_min  ?? 0) * 60,
+      segundos_promedio:    0,
+      sesion_alumno_id:     data.id,
+    });
+  }
+
+  /**
+   * Recupera el resultado usando el código de sesión y el ID del alumno.
+   * Fallback cuando sesionAlumnoId no está en memoria (recarga completa).
+   */
+  async recuperarResultadoPorCodigo(codigo: string, alumnoId: string): Promise<void> {
+    const { data: sesion } = await this.supabase.client
+      .from('sesiones')
+      .select('id')
+      .eq('codigo_acceso', codigo.trim().toUpperCase())
+      .single();
+
+    if (!sesion) return;
+
+    const { data } = await this.supabase.client
+      .from('sesion_alumnos')
+      .select('id, porcentaje, total_correctas, total_incorrectas, tiempo_usado_min')
+      .eq('sesion_id', sesion.id)
+      .eq('alumno_id', alumnoId)
+      .single();
+
+    if (!data) return;
+
+    this.sesionAlumnoId.set(data.id);
+    this.resultadoFinal.set({
+      porcentaje:           data.porcentaje         ?? 0,
+      total_correctas:      data.total_correctas    ?? 0,
+      total_incorrectas:    data.total_incorrectas  ?? 0,
+      total_sin_contestar:  0,
+      tiempo_usado_seg:     (data.tiempo_usado_min  ?? 0) * 60,
+      segundos_promedio:    0,
+      sesion_alumno_id:     data.id,
+    });
+  }
+
   reset(): void {
     this._desuscribirseDeEstado();
     this._detenerPolling();

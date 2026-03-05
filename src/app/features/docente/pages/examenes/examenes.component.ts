@@ -18,7 +18,6 @@ import { Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 
 import { ExamenesService, SesionResumen }  from '../../services/examenes.service';
-import { GruposService }    from '../../services/grupos.service';
 import { SesionesService }  from '../../services/sesiones.service';
 import {
   NavbarComponent,
@@ -43,7 +42,7 @@ import { ExamenConGrupo, IniciarExamenPayload } from '../../services/examenes.se
     LoadingSpinnerComponent,
     ModalIniciarExamenComponent,
   ],
-  providers: [ExamenesService, GruposService, SesionesService],
+  providers: [ExamenesService, SesionesService],
   template: `
     <app-navbar modo="default" />
 
@@ -254,7 +253,6 @@ import { ExamenConGrupo, IniciarExamenPayload } from '../../services/examenes.se
     @if (examenParaIniciar()) {
       <app-modal-iniciar-examen
         [examen]="examenParaIniciar()!"
-        [grupos]="gruposService.grupos()"
         [cargando]="iniciandoExamen()"
         (iniciar)="onIniciarExamen($event)"
         (cerrar)="cerrarModalIniciar()"
@@ -294,7 +292,6 @@ import { ExamenConGrupo, IniciarExamenPayload } from '../../services/examenes.se
 export class ExamenesComponent implements OnInit {
   // ── Dependencias ────────────────────────────────────────────────
   readonly servicio       = inject(ExamenesService);
-  readonly gruposService  = inject(GruposService);
   private readonly sesionesService = inject(SesionesService);
   private readonly router = inject(Router);
 
@@ -309,10 +306,7 @@ export class ExamenesComponent implements OnInit {
   // ── Ciclo de vida ─────────────────────────────────────────────
 
   async ngOnInit(): Promise<void> {
-    await Promise.all([
-      this.servicio.cargarExamenes(),
-      this.gruposService.cargarGrupos(),
-    ]);
+    await this.servicio.cargarExamenes();
 
     // Bug 6: cargar historial de sesiones
     const sesiones = await this.servicio.cargarSesionesRecientes();

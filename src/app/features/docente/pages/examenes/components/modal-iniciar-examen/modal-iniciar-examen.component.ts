@@ -12,16 +12,14 @@ import {
   ChangeDetectionStrategy,
   input,
   output,
-  signal,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { Examen, Grupo } from '../../../../../../shared/models';
+import { Examen } from '../../../../../../shared/models';
 import { IniciarExamenPayload } from '../../../../services/examenes.service';
 
 @Component({
   selector: 'app-modal-iniciar-examen',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [],
   template: `
     <!-- Backdrop -->
     <div
@@ -74,31 +72,6 @@ import { IniciarExamenPayload } from '../../../../services/examenes.service';
                 Duración: {{ examen().duracion_min }} minutos
               </p>
             </div>
-          </div>
-
-          <!-- Selector de grupo -->
-          <div class="flex flex-col gap-1.5">
-            <label for="grupo-select" class="text-sm font-medium text-slate-700">
-              Selecciona el grupo a evaluar
-            </label>
-            <select
-              id="grupo-select"
-              [(ngModel)]="grupoSeleccionadoId"
-              (ngModelChange)="mostrarErrorGrupo.set(false)"
-              class="w-full px-3 py-2.5 text-sm border rounded-lg text-slate-800 bg-white
-                     focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
-                     transition-colors cursor-pointer"
-              [class.border-red-400]="mostrarErrorGrupo()"
-              [class.border-slate-200]="!mostrarErrorGrupo()"
-            >
-              <option value="">Seleccionar grupo...</option>
-              @for (grupo of grupos(); track grupo.id) {
-                <option [value]="grupo.id">{{ grupo.nombre }}</option>
-              }
-            </select>
-            @if (mostrarErrorGrupo()) {
-              <p class="text-xs text-red-500">Selecciona un grupo para continuar.</p>
-            }
           </div>
 
           <!-- Aviso informativo -->
@@ -157,32 +130,20 @@ import { IniciarExamenPayload } from '../../../../services/examenes.service';
 export class ModalIniciarExamenComponent {
   // ── Inputs ─────────────────────────────────────────────
   examen   = input.required<Examen>();
-  grupos   = input<Grupo[]>([]);
   cargando = input(false);
 
   // ── Outputs ────────────────────────────────────────────
   iniciar = output<IniciarExamenPayload>();
   cerrar  = output<void>();
 
-  // ── Estado local ───────────────────────────────────────
-  grupoSeleccionadoId = '';
-  readonly mostrarErrorGrupo = signal(false);
-
   // ── Métodos ────────────────────────────────────────────
 
   onIniciar(): void {
-    if (!this.grupoSeleccionadoId) {
-      this.mostrarErrorGrupo.set(true);
-      return;
-    }
-    this.mostrarErrorGrupo.set(false);
-    this.iniciar.emit({ examenId: this.examen().id, grupoId: this.grupoSeleccionadoId });
+    this.iniciar.emit({ examenId: this.examen().id, grupoId: this.examen().grupo_id });
   }
 
   onCerrar(): void {
     if (this.cargando()) return;
-    this.grupoSeleccionadoId = '';
-    this.mostrarErrorGrupo.set(false);
     this.cerrar.emit();
   }
 

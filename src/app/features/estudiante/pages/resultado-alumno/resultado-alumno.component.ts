@@ -26,11 +26,10 @@ import {
   Component,
   ChangeDetectionStrategy,
   inject,
-  signal,
   computed,
   OnInit,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { RouterLink, ActivatedRoute } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { ExamenActivoService } from '../../services/examen-activo.service';
 
@@ -78,7 +77,7 @@ import { ExamenActivoService } from '../../services/examen-activo.service';
 
               <!-- Encabezado del reporte -->
               <div class="text-center px-6 pt-8 pb-5 border-b border-slate-100">
-                <h1 class="text-xl font-bold text-slate-900">Exam Results Report</h1>
+                <h1 class="text-xl font-bold text-slate-900">Reporte de Resultados</h1>
                 <p class="text-sm text-slate-500 mt-1">
                   {{ servicio.sesion()?.examen_titulo ?? 'Examen' }}
                 </p>
@@ -101,14 +100,14 @@ import { ExamenActivoService } from '../../services/examen-activo.service';
                   [class.bg-red-100]="!aprobado()"
                   [class.text-red-700]="!aprobado()"
                 >
-                  {{ aprobado() ? 'Passed' : 'Failed' }}
+                  {{ aprobado() ? 'Aprobado' : 'Reprobado' }}
                 </span>
               </div>
 
               <!-- Cabecera de columnas -->
               <div class="grid grid-cols-2 px-6 py-2 bg-slate-50">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">METRIC</span>
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">VALUE</span>
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Métrica</span>
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Valor</span>
               </div>
 
               <!-- Tabla de métricas (estilo ThatQuiz) -->
@@ -208,20 +207,7 @@ import { ExamenActivoService } from '../../services/examen-activo.service';
               </div>
 
               <!-- ── Acciones ── -->
-              <div class="px-6 py-5 border-t border-slate-100 space-y-3">
-
-                <!-- Botón Download PDF (placeholder — funcionalidad futura) -->
-                <button
-                  type="button"
-                  class="w-full flex items-center justify-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors py-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download PDF Report
-                </button>
-
-                <!-- Link al inicio -->
+              <div class="px-6 py-5 border-t border-slate-100">
                 <div class="text-center">
                   <a
                     routerLink="/"
@@ -233,7 +219,6 @@ import { ExamenActivoService } from '../../services/examen-activo.service';
                     Volver al inicio
                   </a>
                 </div>
-
               </div>
             </div>
           }
@@ -246,6 +231,7 @@ import { ExamenActivoService } from '../../services/examen-activo.service';
 export class ResultadoAlumnoComponent implements OnInit {
   // ── Dependencias ────────────────────────────────────────────────
   readonly servicio = inject(ExamenActivoService);
+  private readonly route = inject(ActivatedRoute);
 
   // ── Estado ───────────────────────────────────────────────────────
 
@@ -287,8 +273,20 @@ export class ResultadoAlumnoComponent implements OnInit {
   // ── Ciclo de vida ─────────────────────────────────────────────
 
   ngOnInit(): void {
-    // Si no hay resultado en el servicio (alumno recargó la página),
-    // podría recuperarse de Supabase. Por ahora se muestra el spinner.
-    // TODO (mejora futura): recuperar de DB por sesion_alumno_id guardado en sessionStorage.
+    if (this.servicio.resultadoFinal()) return;
+
+    // Intenta recuperar si sesionAlumnoId todavía está en el servicio
+    const saId = this.servicio.sesionAlumnoId();
+    if (saId) {
+      this.servicio.recuperarResultado(saId);
+      return;
+    }
+
+    // Fallback: recuperar usando código de sesión + alumnoId del sessionStorage
+    const codigo = this.route.parent?.snapshot.paramMap.get('codigo') ?? '';
+    const alumnoId = sessionStorage.getItem(`proctor_alumno_${codigo}`) ?? '';
+    if (codigo && alumnoId) {
+      this.servicio.recuperarResultadoPorCodigo(codigo, alumnoId);
+    }
   }
 }
