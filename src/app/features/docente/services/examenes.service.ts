@@ -55,6 +55,8 @@ export interface OpcionPayload {
 export interface PreguntaPayload {
   texto: string;
   tipo: 'opcion_multiple' | 'texto_abierto';
+  /** URL pública de imagen opcional (Supabase Storage bucket question-images) */
+  imagen_url?: string | null;
   opciones: OpcionPayload[];
 }
 
@@ -418,9 +420,10 @@ export class ExamenesService {
   ): Promise<void> {
     // Insertar todas las preguntas en una sola query
     const preguntasPayload = preguntas.map((p) => ({
-      examen_id: examenId,
-      texto: p.texto,
-      tipo: p.tipo,
+      examen_id:  examenId,
+      texto:      p.texto,
+      tipo:       p.tipo,
+      imagen_url: p.imagen_url ?? null,
     }));
 
     const { data: preguntasCreadas, error: errPreguntas } = await this.supabase
@@ -461,5 +464,48 @@ export class ExamenesService {
 
       if (errOpciones) throw errOpciones;
     }
+  }
+
+  // ── Storage (imágenes de preguntas) ────────────────────
+
+  /**
+   * Sube un archivo de imagen al bucket `question-images`.
+   * Retorna la URL pública o null si falló.
+   */
+  async subirImagenPregunta(file: File): Promise<string | null> {
+    const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const { error } = await this.supabase.storage
+      .from('question-images')
+      .upload(path, file, { upsert: false });
+
+    if (error) {
+      console.error('[ExamenesService] subirImagenPregunta:', error);
+      return null;
+    }
+
+    const { data } = this.supabase.storage
+      .from('question-images')
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  }
+
+  /**
+   * Elimina una imagen del bucket a partir de su URL pública.
+   */
+  async eliminarImagenPregunta(url: string): Promise<void> {
+    const marker = '/question-images/';
+    const idx    = url.indexOf(marker);
+    if (idx === -1) return;
+
+    const path = url.slice(idx + marker.length);
+
+    const { error } = await this.supabase.storage
+      .from('question-images')
+      .remove([path]);
+
+    if (error) console.error('[ExamenesService] eliminarImagenPregunta:', error);
   }
 }

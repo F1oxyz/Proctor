@@ -6,6 +6,12 @@
 //   - Botón "Agregar opción" visible cuando < 4 opciones
 //   - Botón "×" para eliminar una opción cuando > 2
 //   - Ninguna opción puede quedar vacía (validación)
+//
+// FEATURE 2: imagen opcional por pregunta
+//   - El docente puede adjuntar una imagen desde su dispositivo
+//   - La imagen se sube a Supabase Storage (bucket question-images)
+//   - Preview con botón de eliminar
+//   - La URL se emite en el PreguntaPayload
 // =============================================================
 
 import {
@@ -14,11 +20,11 @@ import {
   input,
   output,
   signal,
-  computed,
+  inject,
   OnInit,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { PreguntaPayload, OpcionPayload } from '../../../../services/examenes.service';
+import { ExamenesService, PreguntaPayload, OpcionPayload } from '../../../../services/examenes.service';
 
 const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
 
@@ -116,6 +122,73 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
           />
           @if (mostrarErrorTexto()) {
             <p class="text-xs text-red-500">El texto de la pregunta es requerido.</p>
+          }
+        </div>
+
+        <!-- ── Imagen opcional (Feature 2) ─── -->
+        <div class="flex flex-col gap-2">
+          <span class="text-xs font-medium text-slate-600">
+            Imagen <span class="text-slate-400">(Opcional)</span>
+          </span>
+
+          @if (imagenUrl()) {
+            <!-- Preview de la imagen subida -->
+            <div class="relative group rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+              <img
+                [src]="imagenUrl()!"
+                alt="Imagen de la pregunta"
+                class="w-full max-h-48 object-contain"
+              />
+              <!-- Botón eliminar -->
+              <button
+                type="button"
+                (click)="eliminarImagen()"
+                [disabled]="subiendoImagen()"
+                class="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-md
+                       opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700
+                       disabled:opacity-50"
+                aria-label="Eliminar imagen"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          } @else {
+            <!-- Botón / zona de upload -->
+            <label
+              [for]="'img-input-' + numero()"
+              class="flex items-center gap-2 px-3 py-2.5 border border-dashed border-gray-300
+                     rounded-lg text-xs font-medium text-slate-500 hover:border-blue-400
+                     hover:text-blue-600 hover:bg-blue-50/40 transition-colors cursor-pointer"
+              [class.opacity-60]="subiendoImagen()"
+              [class.pointer-events-none]="subiendoImagen()"
+            >
+              @if (subiendoImagen()) {
+                <svg class="w-4 h-4 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+                Subiendo imagen...
+              } @else {
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Adjuntar imagen a la pregunta
+              }
+            </label>
+            <input
+              [id]="'img-input-' + numero()"
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              class="hidden"
+              (change)="onSeleccionarImagen($event)"
+            />
+          }
+
+          @if (errorImagen()) {
+            <p class="text-xs text-red-500">{{ errorImagen() }}</p>
           }
         </div>
 
@@ -221,6 +294,9 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
   `,
 })
 export class PreguntaCardComponent implements OnInit {
+  // ── Dependencias ───────────────────────────────────────
+  private readonly examenesService = inject(ExamenesService);
+
   // ── Inputs ─────────────────────────────────────────────
   numero = input.required<number>();
   preguntaInicial = input<PreguntaPayload | null>(null);
@@ -231,7 +307,7 @@ export class PreguntaCardComponent implements OnInit {
 
   // ── Estado interno ─────────────────────────────────────
 
-  textoPregunta   = '';
+  textoPregunta     = '';
   opcionCorrectaIdx = -1;
 
   /** Bug 9: empezar con 2 opciones, máximo 4 */
@@ -245,6 +321,15 @@ export class PreguntaCardComponent implements OnInit {
   readonly tocado = signal(false);
   readonly letras = LETRAS_OPCIONES;
 
+  // ── Estado imagen (Feature 2) ──────────────────────────
+
+  /** URL pública de la imagen subida (null si no hay) */
+  readonly imagenUrl      = signal<string | null>(null);
+  /** true mientras se sube la imagen a Storage */
+  readonly subiendoImagen = signal(false);
+  /** Mensaje de error si la imagen no se pudo subir */
+  readonly errorImagen    = signal<string | null>(null);
+
   // ── Lifecycle ──────────────────────────────────────────
 
   ngOnInit() {
@@ -252,6 +337,7 @@ export class PreguntaCardComponent implements OnInit {
     if (inicial) {
       this.textoPregunta = inicial.texto;
       this.tipoActual.set(inicial.tipo);
+      this.imagenUrl.set(inicial.imagen_url ?? null);
       if (inicial.tipo === 'opcion_multiple' && inicial.opciones.length > 0) {
         // Bug 9: cargar exactamente las opciones guardadas
         this.opciones = inicial.opciones.map((op) => ({ texto: op.texto }));
@@ -324,15 +410,59 @@ export class PreguntaCardComponent implements OnInit {
     this.emitirCambio();
   }
 
+  // ── Feature 2: imagen ──────────────────────────────────
+
+  /** Sube la imagen seleccionada al bucket de Supabase Storage */
+  async onSeleccionarImagen(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+
+    // Validación de tamaño (5 MB máx)
+    if (file.size > 5 * 1024 * 1024) {
+      this.errorImagen.set('La imagen no debe superar 5 MB.');
+      input.value = '';
+      return;
+    }
+
+    this.subiendoImagen.set(true);
+    this.errorImagen.set(null);
+
+    const url = await this.examenesService.subirImagenPregunta(file);
+
+    if (url) {
+      this.imagenUrl.set(url);
+      this.emitirCambio();
+    } else {
+      this.errorImagen.set('No se pudo subir la imagen. Intenta de nuevo.');
+    }
+
+    this.subiendoImagen.set(false);
+    input.value = ''; // reset para permitir re-seleccionar el mismo archivo
+  }
+
+  /** Elimina la imagen actual del bucket y limpia el estado */
+  async eliminarImagen(): Promise<void> {
+    const url = this.imagenUrl();
+    if (!url) return;
+
+    this.subiendoImagen.set(true);
+    await this.examenesService.eliminarImagenPregunta(url);
+    this.imagenUrl.set(null);
+    this.subiendoImagen.set(false);
+    this.emitirCambio();
+  }
+
   emitirCambio() {
     const payload: PreguntaPayload = {
-      texto: this.textoPregunta,
-      tipo:  this.tipoActual(),
-      opciones: this.tipoActual() === 'opcion_multiple'
+      texto:      this.textoPregunta,
+      tipo:       this.tipoActual(),
+      imagen_url: this.imagenUrl(),
+      opciones:   this.tipoActual() === 'opcion_multiple'
         ? this.opciones.map((o, i) => ({
-            texto: o.texto,
+            texto:       o.texto,
             es_correcta: i === this.opcionCorrectaIdx,
-            orden: i,
+            orden:       i,
           }))
         : [],
     };

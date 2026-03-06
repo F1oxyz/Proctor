@@ -21,6 +21,7 @@ import {
   ChangeDetectionStrategy,
   input,
   output,
+  signal,
 } from '@angular/core';
 import { PreguntaActiva, OpcionActiva } from '../../../../services/examen-activo.service';
 
@@ -29,6 +30,55 @@ import { PreguntaActiva, OpcionActiva } from '../../../../services/examen-activo
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-4">
+
+      <!-- Imagen opcional de la pregunta -->
+      @if (pregunta().imagen_url) {
+        <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+          <button
+            type="button"
+            class="w-full cursor-zoom-in"
+            aria-label="Ver imagen en pantalla completa"
+            (click)="imagenExpandida.set(true)"
+          >
+            <img
+              [src]="pregunta().imagen_url!"
+              alt="Imagen de la pregunta"
+              class="w-full max-h-56 object-contain"
+            />
+          </button>
+          <p class="text-center text-xs text-slate-400 py-1">
+            Toca para ampliar
+          </p>
+        </div>
+      }
+
+      <!-- Modal de imagen ampliada -->
+      @if (imagenExpandida()) {
+        <div
+          class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          (click)="imagenExpandida.set(false)"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Imagen ampliada"
+        >
+          <img
+            [src]="pregunta().imagen_url!"
+            alt="Imagen ampliada de la pregunta"
+            class="max-w-full max-h-full rounded-xl shadow-2xl"
+            (click)="$event.stopPropagation()"
+          />
+          <button
+            type="button"
+            class="absolute top-4 right-4 p-2 text-white bg-black/40 rounded-full hover:bg-black/60 transition-colors"
+            (click)="imagenExpandida.set(false)"
+            aria-label="Cerrar imagen"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      }
 
       <!-- Texto de la pregunta -->
       <h2 class="text-lg font-bold text-slate-900 leading-snug">
@@ -88,6 +138,11 @@ export class PreguntaOpcionMultipleComponent {
 
   /** ID de la opción que el alumno ya seleccionó (null si no ha elegido) */
   opcionSeleccionadaId = input<string | null>(null);
+
+  // ── Estado local ─────────────────────────────────────────────────
+
+  /** true cuando la imagen se muestra en overlay a pantalla completa */
+  readonly imagenExpandida = signal(false);
 
   // ── Outputs ──────────────────────────────────────────────────────
 

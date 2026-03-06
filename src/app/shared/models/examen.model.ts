@@ -49,6 +49,8 @@ export interface Pregunta {
    * - 'texto_abierto': el alumno escribe su respuesta
    */
   tipo: TipoPregunta;
+  /** URL pública de imagen opcional en Supabase Storage (bucket question-images) */
+  imagen_url: string | null;
   /** Fecha de creación */
   creado_en: string;
 }

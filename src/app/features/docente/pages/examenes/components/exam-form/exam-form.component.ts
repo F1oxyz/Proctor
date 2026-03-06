@@ -365,12 +365,13 @@ export class ExamFormComponent implements OnInit {
         // Poblar las preguntas
         this.preguntas.set(
           examen.preguntas.map((p) => ({
-            texto: p.texto,
-            tipo: p.tipo,
-            opciones: p.opciones.map((o) => ({
-              texto: o.texto,
+            texto:      p.texto,
+            tipo:       p.tipo,
+            imagen_url: p.imagen_url ?? null,
+            opciones:   p.opciones.map((o) => ({
+              texto:       o.texto,
               es_correcta: o.es_correcta,
-              orden: o.orden,
+              orden:       o.orden,
             })),
           }))
         );

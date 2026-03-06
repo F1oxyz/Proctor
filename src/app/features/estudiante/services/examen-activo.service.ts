@@ -28,6 +28,8 @@ export interface PreguntaActiva {
   id: string;
   texto: string;
   tipo: 'opcion_multiple' | 'texto_abierto';
+  /** URL pública de imagen opcional (puede ser null si no tiene imagen) */
+  imagen_url: string | null;
   opciones: OpcionActiva[];
 }
 
@@ -271,6 +273,7 @@ export class ExamenActivoService {
         id,
         texto,
         tipo,
+        imagen_url,
         opciones ( id, texto, es_correcta, orden )
       `)
       .eq('examen_id', examenId);
@@ -283,10 +286,11 @@ export class ExamenActivoService {
 
     const mezcladas = fisherYates([...data]);
     const conOpcionesMezcladas: PreguntaActiva[] = mezcladas.map((p: any) => ({
-      id:      p.id,
-      texto:   p.texto,
-      tipo:    p.tipo,
-      opciones: fisherYates([...(p.opciones ?? [])]),
+      id:         p.id,
+      texto:      p.texto,
+      tipo:       p.tipo,
+      imagen_url: p.imagen_url ?? null,
+      opciones:   fisherYates([...(p.opciones ?? [])]),
     }));
 
     this.preguntas.set(conOpcionesMezcladas);
