@@ -87,10 +87,10 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                 <h2 class="text-sm font-semibold text-slate-700">Detalles del Examen</h2>
               </div>
 
-              <!-- Título + Tiempo en grid -->
+              <!-- Título + Tiempo + Mínimo aprobatorio en grid -->
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <!-- Título del examen -->
-                <div class="md:col-span-2 flex flex-col gap-1.5">
+                <div class="md:col-span-3 flex flex-col gap-1.5">
                   <label for="titulo" class="text-xs font-medium text-slate-600">Título del Examen</label>
                   <input
                     id="titulo"
@@ -136,6 +136,38 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                     <p class="text-xs text-red-500">Mínimo 1 minuto.</p>
                   }
                 </div>
+
+                <!-- Mínimo aprobatorio -->
+                <div class="flex flex-col gap-1.5">
+                  <label for="minimo" class="text-xs font-medium text-slate-600">
+                    Mínimo Aprobatorio (%)
+                  </label>
+                  <div class="relative">
+                    <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                      <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                    </div>
+                    <input
+                      id="minimo"
+                      type="number"
+                      formControlName="minimo_aprobatorio"
+                      min="0"
+                      max="100"
+                      class="w-full pl-9 pr-3 py-2.5 text-sm border rounded-lg text-slate-800
+                             focus:outline-none focus:ring-2 focus:ring-blue-500/20
+                             focus:border-blue-500 transition-colors"
+                      [class.border-red-400]="campoInvalido('minimo_aprobatorio')"
+                      [class.border-gray-200]="!campoInvalido('minimo_aprobatorio')"
+                    />
+                  </div>
+                  @if (campoInvalido('minimo_aprobatorio')) {
+                    <p class="text-xs text-red-500">Debe ser entre 0 y 100.</p>
+                  }
+                </div>
+
+                <!-- Placeholder de tercera columna para alinear el grid -->
+                <div></div>
               </div>
 
               <!-- Selector de grupo -->
@@ -301,10 +333,11 @@ export class ExamFormComponent implements OnInit {
   // ── Formulario de metadata del examen ─────────────────
 
   form = this.fb.group({
-    titulo: ['', [Validators.required, Validators.minLength(3)]],
-    duracion_min: [60, [Validators.required, Validators.min(1)]],
-    grupo_id: ['', Validators.required],
-    descripcion: [''],
+    titulo:             ['', [Validators.required, Validators.minLength(3)]],
+    duracion_min:       [60, [Validators.required, Validators.min(1)]],
+    minimo_aprobatorio: [60, [Validators.required, Validators.min(0), Validators.max(100)]],
+    grupo_id:           ['', Validators.required],
+    descripcion:        [''],
   });
 
   // ── Lifecycle ──────────────────────────────────────────
@@ -323,9 +356,10 @@ export class ExamFormComponent implements OnInit {
       if (examen) {
         // Poblar el formulario de metadata
         this.form.patchValue({
-          titulo: examen.titulo,
-          duracion_min: examen.duracion_min,
-          grupo_id: examen.grupo_id,
+          titulo:             examen.titulo,
+          duracion_min:       examen.duracion_min,
+          minimo_aprobatorio: examen.minimo_aprobatorio ?? 60,
+          grupo_id:           examen.grupo_id,
         });
 
         // Poblar las preguntas
@@ -418,13 +452,14 @@ export class ExamFormComponent implements OnInit {
 
     this.errorPreguntas.set(null);
 
-    const { titulo, duracion_min, grupo_id, descripcion } = this.form.value;
+    const { titulo, duracion_min, minimo_aprobatorio, grupo_id } = this.form.value;
 
     const payload = {
-      titulo: titulo!,
-      duracion_min: duracion_min!,
-      grupo_id: grupo_id!,
-      preguntas: this.preguntas(),
+      titulo:             titulo!,
+      duracion_min:       duracion_min!,
+      minimo_aprobatorio: minimo_aprobatorio!,
+      grupo_id:           grupo_id!,
+      preguntas:          this.preguntas(),
     };
 
     let result;

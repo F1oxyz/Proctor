@@ -62,6 +62,8 @@ export interface PreguntaPayload {
 export interface ExamenPayload {
   titulo: string;
   duracion_min: number;
+  /** Porcentaje mínimo (0-100) para aprobar. Default: 60 */
+  minimo_aprobatorio: number;
   grupo_id: string;
   preguntas: PreguntaPayload[];
 }
@@ -196,10 +198,11 @@ export class ExamenesService {
       const { data: examen, error: errExamen } = await this.supabase
         .from('examenes')
         .insert({
-          titulo: payload.titulo,
-          duracion_min: payload.duracion_min,
-          grupo_id: payload.grupo_id,
-          maestro_id: maestroId,
+          titulo:             payload.titulo,
+          duracion_min:       payload.duracion_min,
+          minimo_aprobatorio: payload.minimo_aprobatorio,
+          grupo_id:           payload.grupo_id,
+          maestro_id:         maestroId,
         })
         .select()
         .single();
@@ -243,9 +246,10 @@ export class ExamenesService {
       const { data: examen, error: errExamen } = await this.supabase
         .from('examenes')
         .update({
-          titulo: payload.titulo,
-          duracion_min: payload.duracion_min,
-          grupo_id: payload.grupo_id,
+          titulo:             payload.titulo,
+          duracion_min:       payload.duracion_min,
+          minimo_aprobatorio: payload.minimo_aprobatorio,
+          grupo_id:           payload.grupo_id,
         })
         .eq('id', examenId)
         .select()

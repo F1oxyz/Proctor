@@ -44,6 +44,8 @@ export interface SesionActiva {
   examen_titulo: string;
   grupo_id: string;
   duracion_min: number;
+  /** Porcentaje mínimo (0-100) para aprobar. Viene de examenes.minimo_aprobatorio */
+  minimo_aprobatorio: number;
   codigo_acceso: string;
   estado: string;        // 'esperando' | 'activa' | 'finalizada'
   iniciada_en: string | null;  // Bug 4: cuándo inició el examen
@@ -142,7 +144,7 @@ export class ExamenActivoService {
         codigo_acceso,
         estado,
         iniciada_en,
-        examenes ( titulo, duracion_min, grupo_id )
+        examenes ( titulo, duracion_min, grupo_id, minimo_aprobatorio )
       `)
       .eq('codigo_acceso', codigo.trim().toUpperCase())
       .single();
@@ -169,14 +171,15 @@ export class ExamenActivoService {
     }
 
     this.sesion.set({
-      id:            sesionData.id,
-      examen_id:     sesionData.examen_id,
-      examen_titulo: examenJoin?.titulo ?? '—',
-      grupo_id:      grupoId,
-      duracion_min:  examenJoin?.duracion_min ?? 30,
-      codigo_acceso: sesionData.codigo_acceso,
-      estado:        sesionData.estado,
-      iniciada_en:   (sesionData as any).iniciada_en ?? null,  // Bug 4
+      id:                 sesionData.id,
+      examen_id:          sesionData.examen_id,
+      examen_titulo:      examenJoin?.titulo ?? '—',
+      grupo_id:           grupoId,
+      duracion_min:       examenJoin?.duracion_min ?? 30,
+      minimo_aprobatorio: examenJoin?.minimo_aprobatorio ?? 60,
+      codigo_acceso:      sesionData.codigo_acceso,
+      estado:             sesionData.estado,
+      iniciada_en:        (sesionData as any).iniciada_en ?? null,  // Bug 4
     });
 
     // Bug 6: Realtime + polling de respaldo para detectar cambio de estado

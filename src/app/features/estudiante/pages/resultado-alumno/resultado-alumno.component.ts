@@ -243,8 +243,10 @@ export class ResultadoAlumnoComponent implements OnInit {
   /** Resultado final del servicio */
   readonly resultado = computed(() => this.servicio.resultadoFinal());
 
-  /** true si el porcentaje es >= 60 (aprobado) */
-  readonly aprobado = computed(() => (this.resultado()?.porcentaje ?? 0) >= 60);
+  /** true si el porcentaje supera el mínimo aprobatorio del examen */
+  readonly aprobado = computed(() =>
+    (this.resultado()?.porcentaje ?? 0) >= (this.servicio.sesion()?.minimo_aprobatorio ?? 60)
+  );
 
   /** Iniciales del alumno para el avatar */
   readonly iniciales = computed(() => {

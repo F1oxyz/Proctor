@@ -54,6 +54,8 @@ interface SesionInfo {
   iniciada_en: string | null;
   duracion_min: number;
   codigo_acceso: string;
+  /** Porcentaje mínimo (0-100) para aprobar el examen */
+  minimo_aprobatorio: number;
 }
 
 /** Bug 5: Respuesta del alumno enriquecida con datos de la pregunta */
@@ -165,8 +167,8 @@ interface RespuestaConDatos {
               Promedio Grupal
             </p>
             <p class="text-2xl font-bold"
-              [class.text-green-600]="promedioGrupal() >= 60"
-              [class.text-red-600]="promedioGrupal() < 60"
+              [class.text-green-600]="promedioGrupal() >= (sesionInfo()?.minimo_aprobatorio ?? 60)"
+              [class.text-red-600]="promedioGrupal() < (sesionInfo()?.minimo_aprobatorio ?? 60)"
             >
               {{ promedioGrupal() }}%
             </p>
@@ -175,7 +177,7 @@ interface RespuestaConDatos {
           <!-- Aprobados -->
           <div class="bg-white border border-slate-200 rounded-xl p-4">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
-              Aprobados (≥60%)
+              Aprobados (≥{{ sesionInfo()?.minimo_aprobatorio ?? 60 }}%)
             </p>
             <p class="text-2xl font-bold text-green-600">{{ totalAprobados() }}</p>
           </div>
@@ -238,6 +240,7 @@ interface RespuestaConDatos {
                     <tr
                       app-fila-resultado
                       [fila]="fila"
+                      [minimoAprobatorio]="sesionInfo()?.minimo_aprobatorio ?? 60"
                       class="hover:bg-blue-50 transition-colors cursor-pointer"
                       [class.bg-blue-50]="alumnoSeleccionado()?.id === fila.id"
                       (click)="abrirRespuestasAlumno(fila)"
@@ -434,8 +437,8 @@ interface RespuestaConDatos {
               </span>
               <span>
                 Nota: <strong
-                  [class.text-green-600]="(alumnoSeleccionado()!.porcentaje ?? 0) >= 60"
-                  [class.text-red-500]="(alumnoSeleccionado()!.porcentaje ?? 0) < 60"
+                  [class.text-green-600]="(alumnoSeleccionado()!.porcentaje ?? 0) >= (sesionInfo()?.minimo_aprobatorio ?? 60)"
+                  [class.text-red-500]="(alumnoSeleccionado()!.porcentaje ?? 0) < (sesionInfo()?.minimo_aprobatorio ?? 60)"
                 >{{ alumnoSeleccionado()!.porcentaje ?? 0 }}%</strong>
               </span>
             </div>
@@ -494,10 +497,11 @@ export class ResultadosComponent implements OnInit {
     return Math.round(suma / enviados.length);
   });
 
-  /** Alumnos con porcentaje >= 60 */
-  readonly totalAprobados = computed(
-    () => this.filas().filter((f) => (f.porcentaje ?? 0) >= 60).length
-  );
+  /** Alumnos con porcentaje >= minimo_aprobatorio del examen */
+  readonly totalAprobados = computed(() => {
+    const minimo = this.sesionInfo()?.minimo_aprobatorio ?? 60;
+    return this.filas().filter((f) => (f.porcentaje ?? 0) >= minimo).length;
+  });
 
   /** Bug 5: preguntas abiertas del alumno seleccionado sin calificar */
   readonly pendientesDeCalificar = computed(
@@ -540,6 +544,7 @@ export class ResultadosComponent implements OnInit {
         examenes (
           titulo,
           duracion_min,
+          minimo_aprobatorio,
           grupos ( nombre ),
           preguntas ( id )
         )
@@ -556,11 +561,12 @@ export class ResultadosComponent implements OnInit {
     const examen = (sesionData as any).examenes;
 
     this.sesionInfo.set({
-      examen_titulo:  examen?.titulo ?? '—',
-      grupo_nombre:   examen?.grupos?.nombre ?? '—',
-      iniciada_en:    sesionData.iniciada_en,
-      duracion_min:   examen?.duracion_min ?? 0,
-      codigo_acceso:  sesionData.codigo_acceso,
+      examen_titulo:      examen?.titulo ?? '—',
+      grupo_nombre:       examen?.grupos?.nombre ?? '—',
+      iniciada_en:        sesionData.iniciada_en,
+      duracion_min:       examen?.duracion_min ?? 0,
+      codigo_acceso:      sesionData.codigo_acceso,
+      minimo_aprobatorio: examen?.minimo_aprobatorio ?? 60,
     });
 
     // Guardar total de preguntas para calcular "sin cumplir" en la fila

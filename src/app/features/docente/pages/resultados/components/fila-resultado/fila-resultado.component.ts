@@ -43,10 +43,10 @@ import { SesionAlumnoConDatos } from '../../../../../../shared/models/index';
     <td class="px-4 py-3 text-center">
       <span
         class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold"
-        [class.bg-green-100]="(fila().porcentaje ?? 0) >= 60"
-        [class.text-green-800]="(fila().porcentaje ?? 0) >= 60"
-        [class.bg-red-100]="(fila().porcentaje ?? 0) < 60"
-        [class.text-red-800]="(fila().porcentaje ?? 0) < 60"
+        [class.bg-green-100]="(fila().porcentaje ?? 0) >= minimoAprobatorio()"
+        [class.text-green-800]="(fila().porcentaje ?? 0) >= minimoAprobatorio()"
+        [class.bg-red-100]="(fila().porcentaje ?? 0) < minimoAprobatorio()"
+        [class.text-red-800]="(fila().porcentaje ?? 0) < minimoAprobatorio()"
       >
         {{ fila().porcentaje != null ? fila().porcentaje + '%' : '—' }}
       </span>
@@ -102,6 +102,9 @@ export class FilaResultadoComponent {
 
   /** Datos del registro sesion_alumnos enriquecido con el nombre */
   fila = input.required<SesionAlumnoConDatos>();
+
+  /** Porcentaje mínimo para considerar aprobado. Default: 60 */
+  minimoAprobatorio = input(60);
 
   // ── Computed ─────────────────────────────────────────────────────
 

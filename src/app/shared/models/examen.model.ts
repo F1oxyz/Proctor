@@ -20,6 +20,8 @@ export interface Examen {
   titulo: string;
   /** Duración en minutos. Default: 30 */
   duracion_min: number;
+  /** Porcentaje mínimo (0-100) para aprobar. Default: 60 */
+  minimo_aprobatorio: number;
   /** Fecha de creación */
   creado_en: string;
 }
