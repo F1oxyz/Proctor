@@ -155,11 +155,28 @@ export class FilaResultadoComponent {
     return Math.max(0, total - respondidas);
   });
 
-  /** Tiempo formateado mm:ss desde minutos */
+  /**
+   * Tiempo formateado mm:ss.
+   * Prioriza el cálculo exacto desde los timestamps iniciado_en / enviado_en.
+   * Fallback a tiempo_usado_min si los timestamps no están disponibles.
+   */
   readonly tiempoFormateado = computed(() => {
+    const ini = this.fila().iniciado_en;
+    const fin = this.fila().enviado_en;
+
+    if (ini && fin) {
+      const segs = Math.max(
+        0,
+        Math.round((new Date(fin).getTime() - new Date(ini).getTime()) / 1000)
+      );
+      const min = Math.floor(segs / 60).toString().padStart(2, '0');
+      const sec = (segs % 60).toString().padStart(2, '0');
+      return `${min}:${sec}`;
+    }
+
+    // Fallback: minutos redondeados guardados en BD
     const min = this.fila().tiempo_usado_min;
     if (min == null) return '—';
-    const m = min.toString().padStart(2, '0');
-    return `${m}:00`; // DB guarda en minutos; los segundos exactos se pierden al redondear
+    return `${min.toString().padStart(2, '0')}:00`;
   });
 }

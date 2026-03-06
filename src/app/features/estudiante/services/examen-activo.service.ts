@@ -497,7 +497,7 @@ export class ExamenActivoService {
       .update({
         estado:            'enviado',
         enviado_en:        new Date().toISOString(),
-        tiempo_usado_min:  Math.ceil(tiempoUsadoSeg / 60),
+        tiempo_usado_min:  Math.round(tiempoUsadoSeg / 60),
         porcentaje:        porcentaje,
         total_correctas:   totalCorrectas,
         total_incorrectas: totalIncorrectas,

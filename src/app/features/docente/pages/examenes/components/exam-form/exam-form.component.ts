@@ -218,10 +218,13 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
               </button>
             </div>
 
-            <!-- Error si no hay preguntas -->
-            @if (mostrarErrorPreguntas()) {
-              <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
-                Agrega al menos una pregunta antes de guardar.
+            <!-- Error de preguntas (sin preguntas o preguntas incompletas) -->
+            @if (errorPreguntas()) {
+              <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600 flex items-start gap-2">
+                <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {{ errorPreguntas() }}
               </div>
             }
 
@@ -289,8 +292,11 @@ export class ExamFormComponent implements OnInit {
   /** Array de payloads de preguntas del formulario */
   preguntas = signal<PreguntaPayload[]>([]);
 
-  /** Muestra error si se intenta guardar sin preguntas */
-  mostrarErrorPreguntas = signal(false);
+  /** Referencia a todas las tarjetas de pregunta para poder marcarlas como tocadas */
+  readonly preguntaCards = viewChildren(PreguntaCardComponent);
+
+  /** Mensaje de error de la sección de preguntas (null = sin error) */
+  errorPreguntas = signal<string | null>(null);
 
   // ── Formulario de metadata del examen ─────────────────
 
@@ -358,7 +364,7 @@ export class ExamFormComponent implements OnInit {
         ],
       },
     ]);
-    this.mostrarErrorPreguntas.set(false);
+    this.errorPreguntas.set(null);
   }
 
   /** Elimina la pregunta del índice dado */
@@ -378,17 +384,39 @@ export class ExamFormComponent implements OnInit {
 
   /** Valida y guarda el examen (crear o actualizar) */
   async guardar() {
+    // Marcar todos los campos como tocados para activar errores inline
+    this.form.markAllAsTouched();
+    this.preguntaCards().forEach((card) => card.marcarTocado());
+
     // Validar metadata
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      return;
-    }
+    if (this.form.invalid) return;
 
     // Validar que haya al menos una pregunta
     if (this.preguntas().length === 0) {
-      this.mostrarErrorPreguntas.set(true);
+      this.errorPreguntas.set('Agrega al menos una pregunta antes de guardar.');
       return;
     }
+
+    // Validar cada pregunta individualmente
+    const hayPreguntaInvalida = this.preguntas().some((p) => {
+      if (!p.texto.trim()) return true;
+      if (p.tipo === 'opcion_multiple') {
+        return (
+          p.opciones.some((o) => !o.texto.trim()) ||
+          !p.opciones.some((o) => o.es_correcta)
+        );
+      }
+      return false;
+    });
+
+    if (hayPreguntaInvalida) {
+      this.errorPreguntas.set(
+        'Revisa las preguntas marcadas: cada una debe tener texto, opciones completas y una respuesta correcta seleccionada.'
+      );
+      return;
+    }
+
+    this.errorPreguntas.set(null);
 
     const { titulo, duracion_min, grupo_id, descripcion } = this.form.value;
 
