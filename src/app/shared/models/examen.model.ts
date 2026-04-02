@@ -18,6 +18,8 @@ export interface Examen {
   maestro_id: string;
   /** Título del examen. Ej: "Examen Final - Dibujo Industrial" */
   titulo: string;
+  /** Descripción opcional del examen */
+  descripcion?: string | null;
   /** Duración en minutos. Default: 30 */
   duracion_min: number;
   /** Porcentaje mínimo (0-100) para aprobar. Default: 60 */

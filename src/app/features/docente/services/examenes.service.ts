@@ -63,6 +63,7 @@ export interface PreguntaPayload {
 /** Payload completo para crear o editar un examen */
 export interface ExamenPayload {
   titulo: string;
+  descripcion?: string | null;
   duracion_min: number;
   /** Porcentaje mínimo (0-100) para aprobar. Default: 60 */
   minimo_aprobatorio: number;
@@ -236,6 +237,7 @@ export class ExamenesService {
         .from('examenes')
         .insert({
           titulo:             payload.titulo,
+          descripcion:        payload.descripcion ?? null,
           duracion_min:       payload.duracion_min,
           minimo_aprobatorio: payload.minimo_aprobatorio,
           grupo_id:           payload.grupo_id,
@@ -308,6 +310,7 @@ export class ExamenesService {
         .from('examenes')
         .update({
           titulo:             payload.titulo,
+          descripcion:        payload.descripcion ?? null,
           duracion_min:       payload.duracion_min,
           minimo_aprobatorio: payload.minimo_aprobatorio,
           grupo_id:           payload.grupo_id,
