@@ -16,6 +16,48 @@ import { SupabaseService } from '../../../core/services/supabase.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { SesionAlumnoConDatos } from '../../../shared/models/index';
 
+// ── Tipos internos para resultados de queries ─────────────────
+
+/**
+ * Helper seguro: Supabase infiere JOINs de FK como arrays aunque sean 1:1.
+ * Retorna el primer elemento si es array, o el valor tal cual si ya es objeto.
+ */
+function primeroDeArray<T>(val: T | T[] | null | undefined): T | null {
+  if (val == null) return null;
+  if (Array.isArray(val)) return val[0] ?? null;
+  return val;
+}
+
+/** Shape del JOIN sesiones → examenes → grupos en cargarSesion() */
+interface SesionQueryRow {
+  id: string;
+  codigo_acceso: string;
+  iniciada_en: string | null;
+  estado: string;
+  examenes: {
+    titulo: string;
+    duracion_min: number;
+    grupo_id: string;
+    grupos: { nombre: string } | null;
+  } | null;
+}
+
+/** Shape del alumno raw devuelto por cargarAlumnosIniciales().
+ *  Supabase infiere el campo de FK como array; se normaliza con primeroDeArray(). */
+interface SesionAlumnoRaw {
+  id: string;
+  alumno_id: string;
+  peer_id: string | null;
+  estado: string;
+  iniciado_en: string | null;
+  enviado_en: string | null;
+  tiempo_usado_min: number | null;
+  porcentaje: number | null;
+  total_correctas: number | null;
+  total_incorrectas: number | null;
+  alumnos: { nombre_completo: string } | { nombre_completo: string }[] | null;
+}
+
 /** Info básica de la sesión activa para el monitor */
 export interface SesionActiva {
   id: string;
@@ -65,6 +107,9 @@ export class SesionesService {
 
   /** Intervalo de polling fallback cuando Realtime no está disponible */
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
+
+  /** true cuando Realtime confirmó SUBSCRIBED — el polling se degrada */
+  private realtimeActivo = false;
 
   // ── Métodos públicos ────────────────────────────────────────────
 
@@ -175,7 +220,8 @@ export class SesionesService {
       return false;
     }
 
-    const examen = (data as any).examenes;
+    const row = data as unknown as SesionQueryRow;
+    const examen = row.examenes;
     const grupoId = examen?.grupo_id ?? '';
 
     // Bug 10: contar alumnos del grupo para el contador del navbar
@@ -189,13 +235,13 @@ export class SesionesService {
     }
 
     this.sesionActiva.set({
-      id:            data.id,
-      codigo_acceso: data.codigo_acceso,
+      id:            row.id,
+      codigo_acceso: row.codigo_acceso,
       examen_titulo: examen?.titulo ?? '—',
       grupo_nombre:  examen?.grupos?.nombre ?? '—',
       duracion_min:  examen?.duracion_min ?? 30,
-      iniciada_en:   data.iniciada_en ?? new Date().toISOString(),
-      estado:        (data as any).estado ?? 'esperando',
+      iniciada_en:   row.iniciada_en ?? new Date().toISOString(),
+      estado:        row.estado ?? 'esperando',
       total_alumnos: totalAlumnos,
     });
 
@@ -206,14 +252,20 @@ export class SesionesService {
   /**
    * Carga la lista inicial de alumnos del grupo de la sesión
    * y luego activa la suscripción de Realtime + polling fallback
-   * para actualizaciones en vivo aunque Realtime no esté configurado.
+   * para actualizaciones en vivo aunque Realtime no esté habilitado en el proyecto.
+   *
+   * Si ya hay un canal Realtime activo y confirmado (realtimeActivo = true),
+   * solo refresca los datos sin re-suscribirse ni reiniciar el polling.
    *
    * @param sesionId UUID de la sesión activa
    */
   async iniciarMonitoreo(sesionId: string): Promise<void> {
     await this.cargarAlumnosIniciales(sesionId);
-    this.suscribirseARealtime(sesionId);
-    this._iniciarPolling(sesionId);
+    // Evitar re-suscripción si Realtime ya está confirmado
+    if (!this.realtimeActivo) {
+      this.suscribirseARealtime(sesionId);
+      this._iniciarPolling(sesionId);
+    }
   }
 
   /**
@@ -289,6 +341,7 @@ export class SesionesService {
 
   private suscribirseARealtime(sesionId: string): void {
     this.desuscribirseDeRealtime();
+    this.realtimeActivo = false;
 
     this.realtimeChannel = this.supabase.client
       .channel(`sesion-${sesionId}`)
@@ -308,6 +361,14 @@ export class SesionesService {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log(`[SesionesService] Realtime activo para sesión: ${sesionId}`);
+          this.realtimeActivo = true;
+          // Realtime confirmado → el polling ya no es necesario
+          this._detenerPolling();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          // Realtime falló o se cerró → reactivar polling como fallback
+          this.realtimeActivo = false;
+          this._iniciarPolling(sesionId);
+          console.warn(`[SesionesService] Realtime ${status} — polling de respaldo activado.`);
         }
       });
   }
@@ -317,6 +378,7 @@ export class SesionesService {
       this.supabase.client.removeChannel(this.realtimeChannel);
       this.realtimeChannel = null;
     }
+    this.realtimeActivo = false;
   }
 
   /**
@@ -360,10 +422,21 @@ export class SesionesService {
     return generarCodigo() + Date.now().toString(36).slice(-2).toUpperCase();
   }
 
-  private enriquecerAlumnos(data: any[]): SesionAlumnoConDatos[] {
+  private enriquecerAlumnos(data: SesionAlumnoRaw[]): SesionAlumnoConDatos[] {
     return data.map((sa) => ({
-      ...sa,
-      alumno_nombre: sa.alumnos?.nombre_completo ?? '—',
+      id:                sa.id,
+      sesion_id:         '',   // no incluido en la query; placeholder para el tipo
+      alumno_id:         sa.alumno_id,
+      peer_id:           sa.peer_id,
+      estado:            sa.estado as SesionAlumnoConDatos['estado'],
+      iniciado_en:       sa.iniciado_en,
+      enviado_en:        sa.enviado_en,
+      tiempo_usado_min:  sa.tiempo_usado_min,
+      porcentaje:        sa.porcentaje,
+      total_correctas:   sa.total_correctas,
+      total_incorrectas: sa.total_incorrectas,
+      creado_en:         '',   // no incluido en la query; placeholder para el tipo
+      alumno_nombre:     primeroDeArray(sa.alumnos)?.nombre_completo ?? '—',
     }));
   }
 }

@@ -18,6 +18,7 @@ import {
   output,
   signal,
   effect,
+  OnDestroy,
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -118,7 +119,7 @@ import { PreguntaActiva } from '../../../../services/examen-activo.service';
     </div>
   `,
 })
-export class PreguntaAbiertaComponent {
+export class PreguntaAbiertaComponent implements OnDestroy {
   // ── Inputs ───────────────────────────────────────────────────────
 
   /** Datos de la pregunta actual */
@@ -144,10 +145,26 @@ export class PreguntaAbiertaComponent {
   readonly imagenExpandida = signal(false);
 
   constructor() {
-    // Sincronizar el textarea cuando cambia la pregunta o el valor guardado
+    // Sincronizar el textarea cuando cambia la pregunta o el valor guardado.
+    // El effect también actúa como flush implícito: cuando el padre cambia
+    // `pregunta()` (navegar entre preguntas), el effect reemplaza `textoLocal`
+    // con el texto guardado de la nueva pregunta. Antes de eso, ngOnDestroy
+    // no aplica porque el componente sigue vivo — pero el padre reutiliza
+    // esta instancia. Por eso, también flusheamos el debounce dentro del effect.
     effect(() => {
+      // Leer `pregunta()` para que este effect dependa del cambio de pregunta.
+      void this.pregunta();
+      // Flush: emitir inmediatamente el texto pendiente si hay timer activo.
+      this._flushDebounce();
       this.textoLocal = this.valorActual() ?? '';
     });
+  }
+
+  // ── Ciclo de vida ─────────────────────────────────────────────────
+
+  ngOnDestroy(): void {
+    // Flush del debounce al destruirse (ej: al enviar examen o navegar afuera).
+    this._flushDebounce();
   }
 
   // ── Métodos ─────────────────────────────────────────────────────
@@ -159,7 +176,20 @@ export class PreguntaAbiertaComponent {
   onCambio(texto: string): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
       this.respuestaChange.emit(texto);
     }, 800);
+  }
+
+  /**
+   * Emite inmediatamente el texto actual si hay un debounce pendiente.
+   * Llamado en ngOnDestroy y cuando cambia la pregunta.
+   */
+  private _flushDebounce(): void {
+    if (this.debounceTimer !== null) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+      this.respuestaChange.emit(this.textoLocal);
+    }
   }
 }

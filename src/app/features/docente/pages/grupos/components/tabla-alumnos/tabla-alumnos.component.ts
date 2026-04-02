@@ -18,6 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { Alumno } from '../../../../../../shared/models';
 import { InicialesPipe } from '../../../../../../shared/pipes/iniciales.pipe';
 import { EmptyStateComponent } from '../../../../../../shared/components/empty-state/empty-state.component';
+import { colorAvatar } from '../../../../../../shared/utils/avatar.utils';
 
 const ALUMNOS_POR_PAGINA = 5;
 
@@ -264,15 +265,6 @@ export class TablaAlumnosComponent {
     this.eliminarAlumno.emit(alumno);
   }
 
-  colorAvatar(nombre: string): string {
-    const colores = [
-      '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b',
-      '#ef4444', '#06b6d4', '#ec4899', '#84cc16',
-    ];
-    let hash = 0;
-    for (let i = 0; i < nombre.length; i++) {
-      hash = nombre.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colores[Math.abs(hash) % colores.length];
-  }
+  /** @see shared/utils/avatar.utils */
+  readonly colorAvatar = colorAvatar;
 }

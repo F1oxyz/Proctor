@@ -22,6 +22,8 @@ import {
   ElementRef,
   OnInit,
   OnDestroy,
+  afterNextRender,
+  Injector,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -111,7 +113,7 @@ import { SesionAlumnoConDatos } from '../../../../shared/models/index';
             [class.grid-cols-2]="columnas() === 2"
             [class.sm:grid-cols-3]="columnas() === 3"
             [class.lg:grid-cols-3]="columnas() === 3"
-            [class.sm:grid-cols-3]="columnas() === 4"
+            [class.sm:grid-cols-4]="columnas() === 4"
             [class.lg:grid-cols-4]="columnas() === 4"
             [class.xl:grid-cols-4]="columnas() === 4"
           >
@@ -272,6 +274,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
   readonly peer = inject(PeerService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
 
   // ── Estado ───────────────────────────────────────────────────────
 
@@ -292,15 +295,32 @@ export class MonitorComponent implements OnInit, OnDestroy {
   private readonly videoExpandidoEl = viewChild<ElementRef<HTMLVideoElement>>('videoExpandido');
 
   constructor() {
-    // Asignar el stream al elemento <video> cuando se abre pantalla completa
+    /**
+     * Asignar srcObject al <video> cuando se abre pantalla completa.
+     *
+     * Problema: cuando alumnoExpandido() cambia de null → alumno,
+     * el @if del template aún no renderizó el <video>, por lo que
+     * viewChild('videoExpandido') devuelve undefined en ese tick.
+     *
+     * Solución: el effect detecta el cambio de alumnoExpandido(),
+     * luego programa afterNextRender (con el Injector del componente)
+     * para asignar srcObject DESPUÉS de que Angular termine el ciclo
+     * de render y el <video> esté en el DOM.
+     */
     effect(() => {
       const alumno = this.alumnoExpandido();
-      const el = this.videoExpandidoEl()?.nativeElement;
-      if (el && alumno) {
-        const stream = this.streamDeAlumno(alumno.alumno_id);
-        el.srcObject = stream;
-        if (stream) el.play().catch(() => { });
-      }
+      if (!alumno) return;
+
+      afterNextRender(
+        () => {
+          const el = this.videoExpandidoEl()?.nativeElement;
+          if (!el) return;
+          const stream = this.streamDeAlumno(alumno.alumno_id);
+          el.srcObject = stream ?? null;
+          if (stream) el.play().catch(() => { });
+        },
+        { injector: this.injector }
+      );
     });
   }
 
@@ -473,7 +493,10 @@ export class MonitorComponent implements OnInit, OnDestroy {
     if (sesionId) this.sesiones.iniciarMonitoreo(sesionId);
   }
 
-  enviarRecordatorio(alumno: SesionAlumnoConDatos): void {
-    console.log('[Monitor] Enviar recordatorio a:', alumno.alumno_nombre);
+  /** Placeholder para futura notificación push al alumno. No implementado aún. */
+  enviarRecordatorio(_alumno: SesionAlumnoConDatos): void {
+    // No-op: la feature de notificaciones no está disponible todavía.
+    // El botón en alumno-tile está deshabilitado; este handler queda
+    // como stub para cuando se implemente la integración real.
   }
 }

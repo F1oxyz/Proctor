@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
@@ -85,6 +85,3 @@ export class CardEstudianteComponent {
     this.router.navigate(['/examen', codigo]);
   }
 }
-
-// Fix: importar inject
-import { inject } from '@angular/core';

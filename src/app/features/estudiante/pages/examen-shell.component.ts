@@ -20,7 +20,7 @@
  * ─────────────────────────────────────────────────────────────────
  */
 
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, OnDestroy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ExamenActivoService } from '../services/examen-activo.service';
 
@@ -31,4 +31,15 @@ import { ExamenActivoService } from '../services/examen-activo.service';
   providers: [ExamenActivoService],
   template: `<router-outlet />`,
 })
-export class ExamenShellComponent {}
+export class ExamenShellComponent implements OnDestroy {
+  private readonly servicio = inject(ExamenActivoService);
+
+  /**
+   * Garantiza que los canales Realtime y el polling del servicio se limpien
+   * cuando el alumno navega fuera del flujo /examen/:codigo/*.
+   * Sin esto, suscripciones y setInterval quedarían activos indefinidamente.
+   */
+  ngOnDestroy(): void {
+    this.servicio.reset();
+  }
+}

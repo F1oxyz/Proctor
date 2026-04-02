@@ -22,6 +22,7 @@ import {
   ChangeDetectionStrategy,
   inject,
   signal,
+  computed,
   OnInit,
   input,
   viewChildren,
@@ -260,10 +261,13 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
               </div>
             }
 
-            <!-- Error del servicio -->
+            <!-- Error del servicio (incluye bloqueo por historial) -->
             @if (examenesService.error()) {
-              <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
-                {{ examenesService.error() }}
+              <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 flex items-start gap-3">
+                <svg class="w-5 h-5 shrink-0 mt-0.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{{ examenesService.error() }}</span>
               </div>
             }
 
@@ -289,6 +293,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                   variante="primary"
                   tipo="submit"
                   [loading]="examenesService.cargando()"
+                  [disabled]="bloqueadoPorHistorial()"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
@@ -329,6 +334,14 @@ export class ExamFormComponent implements OnInit {
 
   /** Mensaje de error de la sección de preguntas (null = sin error) */
   errorPreguntas = signal<string | null>(null);
+
+  /**
+   * true cuando el servicio retornó el error de bloqueo por historial.
+   * En ese caso, el formulario se deshabilita para evitar intentos repetidos.
+   */
+  readonly bloqueadoPorHistorial = computed(() =>
+    (this.examenesService.error() ?? '').includes('sesiones iniciadas o finalizadas')
+  );
 
   // ── Formulario de metadata del examen ─────────────────
 
@@ -453,13 +466,14 @@ export class ExamFormComponent implements OnInit {
 
     this.errorPreguntas.set(null);
 
-    const { titulo, duracion_min, minimo_aprobatorio, grupo_id } = this.form.value;
+    const { titulo, duracion_min, minimo_aprobatorio, grupo_id, descripcion } = this.form.value;
 
     const payload = {
       titulo: titulo!,
       duracion_min: duracion_min!,
       minimo_aprobatorio: minimo_aprobatorio!,
       grupo_id: grupo_id!,
+      descripcion: descripcion ?? null,
       preguntas: this.preguntas(),
     };
 

@@ -117,9 +117,6 @@ import {
 export class ScreenSharePromptComponent {
   // ── Inputs ───────────────────────────────────────────────────────
 
-  /** Nombre del alumno (para mensajes contextuales) */
-  nombreAlumno = input('');
-
   /** true si ya está compartiendo pantalla */
   compartiendo = input(false);
 

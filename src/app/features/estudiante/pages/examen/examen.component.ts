@@ -89,6 +89,30 @@ import { OpcionActiva } from '../../services/examen-activo.service';
         </div>
       </header>
 
+      <!-- ── Banner de error al guardar respuesta (transitorio, amber) ── -->
+      @if (servicio.errorGuardado()) {
+        <div class="bg-amber-50 border-b border-amber-200 px-4 py-2">
+          <div class="max-w-2xl mx-auto flex items-center gap-2 text-sm text-amber-800">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            {{ servicio.errorGuardado() }}
+          </div>
+        </div>
+      }
+
+      <!-- ── Banner de error crítico (ej: fallo al enviar examen, rojo) ── -->
+      @if (servicio.error()) {
+        <div class="bg-red-50 border-b border-red-300 px-4 py-2">
+          <div class="max-w-2xl mx-auto flex items-center gap-2 text-sm text-red-800">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            {{ servicio.error() }}
+          </div>
+        </div>
+      }
+
       <!-- ── Cuerpo del examen ── -->
       <main class="flex-1 flex items-start justify-center px-4 py-8">
         <div class="w-full max-w-2xl space-y-6">
@@ -152,13 +176,17 @@ import { OpcionActiva } from '../../services/examen-activo.service';
               Anterior
             </button>
 
-            <!-- Botón Enviar (solo en la última pregunta o si ya respondió todo) -->
-            @if (esUltimaPregunta()) {
+            <!-- Botón Enviar: en la última pregunta, O si hay error de envío pendiente (reintento) -->
+            @if (esUltimaPregunta() || servicio.error()) {
               <button
                 type="button"
-                (click)="confirmarEnvio()"
+                (click)="servicio.error() ? enviarExamen() : confirmarEnvio()"
                 [disabled]="enviando()"
-                class="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-xl transition-colors"
+                class="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white disabled:bg-slate-300 disabled:cursor-not-allowed rounded-xl transition-colors"
+                [class.bg-red-600]="!!servicio.error()"
+                [class.hover:bg-red-700]="!!servicio.error()"
+                [class.bg-green-600]="!servicio.error()"
+                [class.hover:bg-green-700]="!servicio.error()"
               >
                 @if (enviando()) {
                   <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -166,6 +194,11 @@ import { OpcionActiva } from '../../services/examen-activo.service';
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
                   </svg>
                   Enviando...
+                } @else if (servicio.error()) {
+                  Reintentar envío
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                 } @else {
                   Enviar Examen
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -353,11 +386,13 @@ export class ExamenComponent implements OnInit, OnDestroy {
 
   /**
    * Se dispara cuando TemporizadorComponent emite tiempoAgotado.
-   * Envía el examen automáticamente.
+   * Detiene el timer e intenta enviar el examen automáticamente.
+   * Si el envío falla (sin conexión), el timer permanece detenido pero
+   * el alumno ve el error y puede reintentar manualmente.
    */
   onTiempoAgotado(): void {
     this.detenerTemporizador();
-    this.enviarExamen();
+    void this.enviarExamen();
   }
 
   /**
@@ -384,17 +419,30 @@ export class ExamenComponent implements OnInit, OnDestroy {
   /**
    * Envía el examen, calcula el resultado y navega a la pantalla
    * de resultado del alumno.
+   * Si el servicio retorna null (error de red), NO navega y deja al alumno
+   * en la pantalla actual — el error queda visible en `servicio.error()`.
    */
   async enviarExamen(): Promise<void> {
     if (this.enviando()) return;
 
     this.mostrarConfirmacion.set(false);
-    this.detenerTemporizador();
     this.enviando.set(true);
+    // Limpiar error previo antes del reintento
+    this.servicio.error.set(null);
 
-    await this.servicio.enviarExamen(this.segundosRestantes());
+    const resultado = await this.servicio.enviarExamen(this.segundosRestantes());
 
     this.enviando.set(false);
+
+    if (!resultado) {
+      // El servicio ya seteó servicio.error() con un mensaje visible.
+      // NO restauramos el timer: si el tiempo se agotó, queda en 00:00.
+      // Si todavía hay tiempo, el alumno puede reintentar con "Enviar Examen".
+      return;
+    }
+
+    // Éxito: detener el timer y navegar a resultados
+    this.detenerTemporizador();
 
     // `:codigo` está en el PARENT route (/examen/:codigo), no en la ruta actual
     // (/examen/:codigo/evaluacion). Usamos el código del servicio como fuente

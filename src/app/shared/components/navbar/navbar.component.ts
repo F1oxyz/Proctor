@@ -32,9 +32,8 @@ import {
   inject,
   computed,
 } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
-import { EstadoSesion } from '../../models/sesion.model';
 
 @Component({
   selector: 'app-navbar',
@@ -161,7 +160,6 @@ import { EstadoSesion } from '../../models/sesion.model';
 })
 export class NavbarComponent {
   private readonly auth = inject(AuthService);
-  private readonly router = inject(Router);
 
   // ── Inputs ─────────────────────────────────────────────
 
@@ -173,9 +171,6 @@ export class NavbarComponent {
 
   /** [Modo monitor] Nombre del examen en curso */
   examenNombre = input<string>('');
-
-  /** [Modo monitor] Estado actual de la sesión */
-  estadoSesion = input<EstadoSesion>('activa');
 
   /** [Modo student] Nombre completo del alumno */
   alumnoNombre = input<string>('');

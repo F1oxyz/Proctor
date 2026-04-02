@@ -37,6 +37,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { SesionAlumnoConDatos } from '../../../../../../shared/models/index';
+import { colorAvatar, getIniciales } from '../../../../../../shared/utils/avatar.utils';
 
 /** Estado visual del tile (distinto del estado DB) */
 export type EstadoTile = 'activo' | 'idle' | 'flagged' | 'offline' | 'enviado';
@@ -168,15 +169,14 @@ export type EstadoTile = 'activo' | 'idle' | 'flagged' | 'offline' | 'enviado';
           </div>
         </div>
 
-        <!-- Botón Send Reminder si está offline -->
+        <!-- Indicador "Avisar" deshabilitado: la notificación push no está implementada -->
         @if (estadoVisual() === 'offline') {
-          <button
-            type="button"
-            (click)="enviarRecordatorio.emit(alumno())"
-            class="shrink-0 text-xs font-medium text-brand hover:text-brand/80 transition-colors"
+          <span
+            class="shrink-0 text-xs text-slate-400 cursor-default"
+            title="Próximamente: notificación al alumno"
           >
-            Avisar
-          </button>
+            Avisar (pronto)
+          </span>
         }
 
         <!-- Icono flagged si aplica -->
@@ -262,28 +262,10 @@ export class AlumnoTileComponent {
   });
 
   /** Iniciales del alumno para el avatar */
-  readonly iniciales = computed(() => {
-    const nombre = this.alumno().alumno_nombre ?? '';
-    return nombre
-      .split(' ')
-      .slice(0, 2)
-      .map((n) => n[0]?.toUpperCase() ?? '')
-      .join('');
-  });
+  readonly iniciales = computed(() => getIniciales(this.alumno().alumno_nombre ?? ''));
 
   /** Color determinístico para el avatar */
-  readonly colorAvatar = computed(() => {
-    const nombre = this.alumno().alumno_nombre ?? 'X';
-    const colores = [
-      '#3b82f6', '#8b5cf6', '#06b6d4', '#10b981',
-      '#f59e0b', '#ef4444', '#6366f1', '#84cc16',
-    ];
-    let hash = 0;
-    for (let i = 0; i < nombre.length; i++) {
-      hash = nombre.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colores[Math.abs(hash) % colores.length];
-  });
+  readonly colorAvatar = computed(() => colorAvatar(this.alumno().alumno_nombre ?? 'X'));
 
   /** "Navegador Web" o "App de Escritorio" según el peer_id */
   readonly tipoConexion = computed(() =>

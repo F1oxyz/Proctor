@@ -20,6 +20,7 @@ import {
   computed,
 } from '@angular/core';
 import { SesionAlumnoConDatos } from '../../../../../../shared/models/index';
+import { colorAvatar, getIniciales } from '../../../../../../shared/utils/avatar.utils';
 
 @Component({
   selector: '[app-fila-resultado]', // selector de atributo para usar en <tr>
@@ -109,31 +110,10 @@ export class FilaResultadoComponent {
   // ── Computed ─────────────────────────────────────────────────────
 
   /** Iniciales del nombre para el avatar */
-  readonly iniciales = computed(() => {
-    const nombre = this.fila().alumno_nombre ?? '';
-    return nombre
-      .split(' ')
-      .slice(0, 2)
-      .map((n) => n[0]?.toUpperCase() ?? '')
-      .join('');
-  });
+  readonly iniciales = computed(() => getIniciales(this.fila().alumno_nombre ?? ''));
 
-  /**
-   * Color determinístico basado en el nombre del alumno.
-   * Misma lógica que en TablaAlumnos del Paso 3 para consistencia visual.
-   */
-  readonly colorAvatar = computed(() => {
-    const nombre = this.fila().alumno_nombre ?? 'X';
-    const colores = [
-      '#3b82f6', '#8b5cf6', '#06b6d4', '#10b981',
-      '#f59e0b', '#ef4444', '#6366f1', '#84cc16',
-    ];
-    let hash = 0;
-    for (let i = 0; i < nombre.length; i++) {
-      hash = nombre.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colores[Math.abs(hash) % colores.length];
-  });
+  /** Color determinístico basado en el nombre del alumno */
+  readonly colorAvatar = computed(() => colorAvatar(this.fila().alumno_nombre ?? 'X'));
 
   /**
    * Preguntas "cumplidas" = correctas + incorrectas.

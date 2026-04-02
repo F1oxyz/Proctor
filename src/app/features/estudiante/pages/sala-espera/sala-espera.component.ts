@@ -168,7 +168,6 @@ import { ScreenSharePromptComponent } from './components/screen-share-prompt/scr
             @if (alumnoIdSeleccionado() && !yaUnido()) {
               <div class="mb-5">
                 <app-screen-share-prompt
-                  [nombreAlumno]="nombreAlumnoSeleccionado()"
                   [compartiendo]="pantallaCompartida()"
                   (pantallaCompartida)="onPantallaCompartida($event)"
                   (pantallaCancelada)="onPantallaCancelada()"
@@ -374,6 +373,12 @@ export class SalaEsperaComponent implements OnInit, OnDestroy {
   /**
    * Bug 1: Paso 1 — unirse a la sala con estado 'unido'.
    * El monitor del profesor lo verá inmediatamente.
+   *
+   * Fix race condition PeerJS: espera explícitamente a que PeerJS esté listo
+   * antes de leer el peerId. Si PeerJS no inicializa en 8 s (timeout), se une
+   * de todos modos con peerId vacío — el monitor lo verá "sin stream" pero
+   * al menos aparece en la sala. El peerId se parchará cuando conectarAlDocente
+   * resuelva (patch vía actualizarPeerIdSiListo).
    */
   async unirseASala(): Promise<void> {
     if (!this.puedeUnirse() || this.uniendose()) return;
@@ -385,14 +390,40 @@ export class SalaEsperaComponent implements OnInit, OnDestroy {
 
     this.uniendose.set(true);
 
-    const peerId = this.peerService.miPeerId() ?? '';
+    // Esperar a que PeerJS asigne el peerId (con timeout de 8 s)
+    const peerId = await this.peerService.esperarPeerId(8000) ?? '';
+
+    if (!peerId) {
+      console.warn('[SalaEspera] PeerJS no estuvo listo en 8 s — uniéndose sin peerId.');
+    }
+
     const ok = await this.servicio.unirseASala(alumno, peerId);
 
     this.uniendose.set(false);
 
     if (ok) {
       this.yaUnido.set(true);
+      // Parche posterior: si PeerJS tardó más y aún no teníamos peerId,
+      // actualizar la DB cuando finalmente se asigne.
+      if (!peerId) {
+        void this._parchearPeerIdCuandoListo();
+      }
     }
+  }
+
+  /**
+   * Si el alumno se unió sin peerId (PeerJS tardó), intenta actualizar
+   * el registro en DB una vez que PeerJS quede listo. Sin bloquear la UI.
+   */
+  private async _parchearPeerIdCuandoListo(): Promise<void> {
+    const peerIdTardio = await this.peerService.esperarPeerId(20000);
+    if (!peerIdTardio) return;
+
+    const sesionAlumnoId = this.servicio.sesionAlumnoId();
+    if (!sesionAlumnoId) return;
+
+    await this.servicio.actualizarPeerId(sesionAlumnoId, peerIdTardio);
+    console.log(`[SalaEspera] peerId parcheado en DB: ${peerIdTardio}`);
   }
 
   /**

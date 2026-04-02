@@ -13,6 +13,44 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { SupabaseService } from '../../../core/services/supabase.service';
 
+// ── Tipos internos para resultados de queries ─────────────────
+
+/** Shape del JOIN sesiones → examenes en cargarSesionPorCodigo() */
+interface SesionPorCodigoRow {
+  id: string;
+  examen_id: string;
+  codigo_acceso: string;
+  estado: string;
+  iniciada_en: string | null;
+  examenes: {
+    titulo: string;
+    duracion_min: number;
+    grupo_id: string;
+    minimo_aprobatorio: number;
+  } | null;
+}
+
+/** Shape del payload NEW que Supabase Realtime envía en UPDATE de sesiones */
+interface SesionRealtimePayload {
+  estado?: string;
+  iniciada_en?: string | null;
+  [key: string]: unknown;
+}
+
+/** Shape de pregunta raw con opciones devuelta por cargarPreguntas() */
+interface PreguntaRaw {
+  id: string;
+  texto: string;
+  tipo: string;
+  imagen_url: string | null;
+  opciones: Array<{
+    id: string;
+    texto: string;
+    es_correcta: boolean;
+    orden: number;
+  }> | null;
+}
+
 // ── Tipos locales ─────────────────────────────────────────────────
 
 /** Opción de respuesta tal como viene de la DB */
@@ -90,6 +128,9 @@ export class ExamenActivoService {
   private _canalEstadoSesion: ReturnType<typeof this.supabase.client.channel> | null = null;
   private _pollInterval: ReturnType<typeof setInterval> | null = null;
 
+  /** true cuando Realtime confirmó SUBSCRIBED para el canal de estado de sesión */
+  private _realtimeEstadoActivo = false;
+
   // ── Estado principal (signals) ───────────────────────────────────
 
   readonly sesion         = signal<SesionActiva | null>(null);
@@ -103,6 +144,8 @@ export class ExamenActivoService {
   readonly resultadoFinal = signal<ResultadoFinal | null>(null);
   readonly cargando       = signal(false);
   readonly error          = signal<string | null>(null);
+  /** Error transitorio al guardar una respuesta (se limpia al guardar OK) */
+  readonly errorGuardado  = signal<string | null>(null);
 
   // ── Computed ─────────────────────────────────────────────────────
 
@@ -163,7 +206,8 @@ export class ExamenActivoService {
       return false;
     }
 
-    const examenJoin = (sesionData as any).examenes;
+    const row        = sesionData as unknown as SesionPorCodigoRow;
+    const examenJoin = row.examenes;
     const grupoId    = examenJoin?.grupo_id ?? '';
 
     if (!grupoId) {
@@ -173,15 +217,15 @@ export class ExamenActivoService {
     }
 
     this.sesion.set({
-      id:                 sesionData.id,
-      examen_id:          sesionData.examen_id,
+      id:                 row.id,
+      examen_id:          row.examen_id,
       examen_titulo:      examenJoin?.titulo ?? '—',
       grupo_id:           grupoId,
       duracion_min:       examenJoin?.duracion_min ?? 30,
       minimo_aprobatorio: examenJoin?.minimo_aprobatorio ?? 60,
-      codigo_acceso:      sesionData.codigo_acceso,
-      estado:             sesionData.estado,
-      iniciada_en:        (sesionData as any).iniciada_en ?? null,  // Bug 4
+      codigo_acceso:      row.codigo_acceso,
+      estado:             row.estado,
+      iniciada_en:        row.iniciada_en ?? null,
     });
 
     // Bug 6: Realtime + polling de respaldo para detectar cambio de estado
@@ -285,10 +329,10 @@ export class ExamenActivoService {
     }
 
     const mezcladas = fisherYates([...data]);
-    const conOpcionesMezcladas: PreguntaActiva[] = mezcladas.map((p: any) => ({
+    const conOpcionesMezcladas: PreguntaActiva[] = (mezcladas as PreguntaRaw[]).map((p) => ({
       id:         p.id,
       texto:      p.texto,
-      tipo:       p.tipo,
+      tipo:       p.tipo as PreguntaActiva['tipo'],
       imagen_url: p.imagen_url ?? null,
       opciones:   fisherYates([...(p.opciones ?? [])]),
     }));
@@ -382,16 +426,36 @@ export class ExamenActivoService {
   }
 
   /**
+   * Actualiza el peer_id de un registro sesion_alumnos en DB.
+   * Se usa para parchar el peer_id cuando PeerJS tardó en inicializar.
+   */
+  async actualizarPeerId(sesionAlumnoId: string, peerId: string): Promise<void> {
+    const { error } = await this.supabase.client
+      .from('sesion_alumnos')
+      .update({ peer_id: peerId })
+      .eq('id', sesionAlumnoId);
+
+    if (error) {
+      console.warn('[ExamenActivoService] actualizarPeerId:', error);
+    }
+  }
+
+  /**
    * Guarda la respuesta de la pregunta actual en mapa local y en Supabase.
+   * Retorna `true` si el guardado en la DB fue exitoso, `false` si falló.
+   * En caso de fallo, setea `errorGuardado` con un mensaje visible para la UI.
    */
   async guardarRespuesta(
     opcionId: string | null,
     respuestaAbierta: string | null = null
-  ): Promise<void> {
+  ): Promise<boolean> {
     const pregunta     = this.preguntaActual();
     const sesionAlumno = this.sesionAlumnoId();
 
-    if (!pregunta || !sesionAlumno) return;
+    if (!pregunta || !sesionAlumno) return false;
+
+    // Limpiar error previo de guardado
+    this.errorGuardado.set(null);
 
     const registro: RespuestaLocal = {
       pregunta_id:       pregunta.id,
@@ -400,6 +464,7 @@ export class ExamenActivoService {
       respondido_en:     new Date().toISOString(),
     };
 
+    // Actualizar estado local OPTIMÍSTICAMENTE
     this.respuestas.update((mapa) => {
       const nuevo = new Map(mapa);
       nuevo.set(pregunta.id, registro);
@@ -424,7 +489,11 @@ export class ExamenActivoService {
 
     if (error) {
       console.warn('[ExamenActivoService] guardarRespuesta upsert:', error);
+      this.errorGuardado.set('No se pudo guardar la respuesta. Verificá tu conexión.');
+      return false;
     }
+
+    return true;
   }
 
   siguientePregunta(): void {
@@ -513,6 +582,9 @@ export class ExamenActivoService {
 
     if (updateError) {
       console.error('[ExamenActivoService] enviarExamen update:', updateError);
+      this.error.set('No se pudo enviar el examen. Verificá tu conexión e intentá de nuevo.');
+      this.cargando.set(false);
+      return null;
     }
 
     const resultado: ResultadoFinal = {
@@ -601,6 +673,7 @@ export class ExamenActivoService {
     this.tiempoInicio.set(null);
     this.resultadoFinal.set(null);
     this.error.set(null);
+    this.errorGuardado.set(null);
   }
 
   // ── Realtime ──────────────────────────────────────────────────────
@@ -619,8 +692,9 @@ export class ExamenActivoService {
           filter: `id=eq.${sesionId}`,
         },
         (payload) => {
-          const nuevoEstado   = (payload.new as any)?.estado;
-          const nuevaIniciada = (payload.new as any)?.iniciada_en ?? null;
+          const newRow        = payload.new as SesionRealtimePayload;
+          const nuevoEstado   = newRow?.estado;
+          const nuevaIniciada = (newRow?.iniciada_en as string | null | undefined) ?? null;
           if (nuevoEstado) {
             this.sesion.update((s) =>
               s ? { ...s, estado: nuevoEstado, iniciada_en: nuevaIniciada ?? s.iniciada_en } : null
@@ -630,7 +704,21 @@ export class ExamenActivoService {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          this._realtimeEstadoActivo = true;
+          // Realtime confirmado → el polling ya no es necesario
+          this._detenerPolling();
+          console.log(`[ExamenActivoService] Realtime activo para sesión: ${sesionId}`);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          // Realtime falló → reactivar polling si la sesión aún está esperando
+          this._realtimeEstadoActivo = false;
+          if (this.sesion()?.estado === 'esperando') {
+            this._iniciarPolling(sesionId);
+          }
+          console.warn(`[ExamenActivoService] Realtime ${status} — polling de respaldo activado.`);
+        }
+      });
   }
 
   private _desuscribirseDeEstado(): void {
@@ -638,6 +726,7 @@ export class ExamenActivoService {
       this.supabase.client.removeChannel(this._canalEstadoSesion);
       this._canalEstadoSesion = null;
     }
+    this._realtimeEstadoActivo = false;
   }
 
   /**

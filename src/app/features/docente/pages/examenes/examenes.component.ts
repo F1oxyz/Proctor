@@ -340,11 +340,6 @@ export class ExamenesComponent implements OnInit {
     }
   }
 
-  onCerrarModal(): void {
-    this.examenParaIniciar.set(null);
-    this.iniciandoExamen.set(false);
-  }
-
   async onIniciarExamen(payload: IniciarExamenPayload): Promise<void> {
     if (this.iniciandoExamen()) return;
 

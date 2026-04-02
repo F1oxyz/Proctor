@@ -133,6 +133,43 @@ export class PeerService {
     llamada.on('error', (err) => console.error('[PeerService] Error en llamada:', err));
   }
 
+  // ── Utilidades de sincronización ─────────────────────────────────
+
+  /**
+   * Espera hasta que PeerJS esté listo (peer.on('open') disparó) o hasta
+   * que se agote el timeout (por defecto 8 s).
+   *
+   * Retorna el peerId asignado, o null si el timeout se agotó antes de
+   * que el peer quedara listo.
+   *
+   * Uso típico: llamar ANTES de leer `miPeerId()` en el flujo de unión.
+   */
+  esperarPeerId(timeoutMs = 8000): Promise<string | null> {
+    // Si ya está listo, retornar inmediatamente
+    const idActual = this.miPeerId();
+    if (idActual) return Promise.resolve(idActual);
+
+    return new Promise<string | null>((resolve) => {
+      const inicio = Date.now();
+
+      const comprobar = (): void => {
+        const id = this.miPeerId();
+        if (id) {
+          resolve(id);
+          return;
+        }
+        if (Date.now() - inicio >= timeoutMs) {
+          console.warn('[PeerService] esperarPeerId: timeout sin peer listo.');
+          resolve(null);
+          return;
+        }
+        setTimeout(comprobar, 100);
+      };
+
+      comprobar();
+    });
+  }
+
   // ── MODO ALUMNO: emisor ──────────────────────────────────────────
 
   async conectarAlDocente(

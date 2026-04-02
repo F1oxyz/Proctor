@@ -73,14 +73,20 @@ export class TemporizadorComponent {
   /**
    * Bug 3: solo emite tiempoAgotado después de que el contador haya
    * tenido un valor positivo (evita disparo espurio al inicializar con 0).
+   *
+   * FIX idempotencia: `yaEmitio` garantiza que la emisión ocurra EXACTAMENTE
+   * una vez por ciclo de vida del componente, sin importar cuántas veces
+   * el effect se re-ejecute con s=0.
    */
   private haEmpezado = false;
+  private yaEmitio   = false;
 
   constructor() {
     effect(() => {
       const s = this.segundosRestantes();
       if (s > 0) this.haEmpezado = true;
-      if (this.haEmpezado && s <= 0) {
+      if (this.haEmpezado && s <= 0 && !this.yaEmitio) {
+        this.yaEmitio = true;
         this.tiempoAgotado.emit();
       }
     });

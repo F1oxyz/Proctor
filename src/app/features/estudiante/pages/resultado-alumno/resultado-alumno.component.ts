@@ -27,11 +27,16 @@ import {
   ChangeDetectionStrategy,
   inject,
   computed,
+  signal,
   OnInit,
+  OnDestroy,
 } from '@angular/core';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { ExamenActivoService } from '../../services/examen-activo.service';
+
+/** UUID v4 regex — igual que en session.guard.ts */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 @Component({
   selector: 'app-resultado-alumno',
@@ -63,10 +68,35 @@ import { ExamenActivoService } from '../../services/examen-activo.service';
         <div class="w-full max-w-lg">
 
           @if (!resultado()) {
-            <!-- Sin datos: spinner mientras carga o mensaje de error -->
-            <div class="flex items-center justify-center py-20">
-              <p class="text-sm text-slate-500">Cargando resultados...</p>
-            </div>
+            @if (cargandoResultado()) {
+              <!-- Spinner mientras recupera de Supabase -->
+              <div class="flex flex-col items-center justify-center py-20 gap-3">
+                <svg class="w-8 h-8 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+                <p class="text-sm text-slate-500">Cargando resultados...</p>
+              </div>
+            } @else {
+              <!-- Fallback: no se pudo recuperar el resultado -->
+              <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 text-center">
+                <div class="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h2 class="text-base font-bold text-slate-800 mb-2">Resultado no disponible</h2>
+                <p class="text-sm text-slate-500 mb-5">
+                  {{ errorRecuperacion() ?? 'No se encontró el resultado de tu examen. Es posible que ya haya sido registrado correctamente.' }}
+                </p>
+                <a
+                  routerLink="/"
+                  class="inline-block px-5 py-2.5 text-sm font-semibold text-white bg-brand hover:bg-brand-secondary rounded-xl transition-colors"
+                >
+                  Ir al inicio
+                </a>
+              </div>
+            }
           }
 
           @else {
@@ -228,7 +258,7 @@ import { ExamenActivoService } from '../../services/examen-activo.service';
     </div>
   `,
 })
-export class ResultadoAlumnoComponent implements OnInit {
+export class ResultadoAlumnoComponent implements OnInit, OnDestroy {
   // ── Dependencias ────────────────────────────────────────────────
   readonly servicio = inject(ExamenActivoService);
   private readonly route = inject(ActivatedRoute);
@@ -237,6 +267,21 @@ export class ResultadoAlumnoComponent implements OnInit {
 
   /** Fecha de hoy para el reporte */
   readonly fechaHoy = new Date();
+
+  /**
+   * true mientras se está intentando recuperar el resultado de Supabase.
+   * Se pone en false cuando hay resultado disponible o se agota el timeout.
+   */
+  readonly cargandoResultado = signal(false);
+
+  /**
+   * Mensaje de error visible si no se pudo recuperar el resultado.
+   * null mientras no haya fallado.
+   */
+  readonly errorRecuperacion = signal<string | null>(null);
+
+  /** Timeout de seguridad: si en 10 s no hay resultado, mostrar fallback */
+  private _timeoutRecuperacion: ReturnType<typeof setTimeout> | null = null;
 
   // ── Computed ─────────────────────────────────────────────────────
 
@@ -275,20 +320,82 @@ export class ResultadoAlumnoComponent implements OnInit {
   // ── Ciclo de vida ─────────────────────────────────────────────
 
   ngOnInit(): void {
+    // Si ya hay resultado en memoria, nada que hacer.
     if (this.servicio.resultadoFinal()) return;
 
+    // Iniciar indicador de carga y timeout de seguridad
+    this.cargandoResultado.set(true);
+
+    this._timeoutRecuperacion = setTimeout(() => {
+      // Si transcurridos 10 s todavía no hay resultado, mostrar fallback
+      if (!this.servicio.resultadoFinal()) {
+        this.cargandoResultado.set(false);
+        this.errorRecuperacion.set(
+          'El tiempo de espera se agotó. Si entregaste el examen, el docente puede ver tu resultado en el monitor.'
+        );
+      }
+    }, 10000);
+
+    void this._recuperar();
+  }
+
+  ngOnDestroy(): void {
+    if (this._timeoutRecuperacion !== null) {
+      clearTimeout(this._timeoutRecuperacion);
+      this._timeoutRecuperacion = null;
+    }
+  }
+
+  // ── Recuperación ─────────────────────────────────────────────────
+
+  private async _recuperar(): Promise<void> {
     // Intenta recuperar si sesionAlumnoId todavía está en el servicio
     const saId = this.servicio.sesionAlumnoId();
     if (saId) {
-      this.servicio.recuperarResultado(saId);
+      await this.servicio.recuperarResultado(saId);
+      this._finalizarRecuperacion();
       return;
     }
 
     // Fallback: recuperar usando código de sesión + alumnoId del sessionStorage
-    const codigo = this.route.parent?.snapshot.paramMap.get('codigo') ?? '';
-    const alumnoId = sessionStorage.getItem(`proctor_alumno_${codigo}`) ?? '';
-    if (codigo && alumnoId) {
-      this.servicio.recuperarResultadoPorCodigo(codigo, alumnoId);
+    const codigo      = this.route.parent?.snapshot.paramMap.get('codigo') ?? '';
+    const alumnoIdRaw = sessionStorage.getItem(`proctor_alumno_${codigo}`);
+
+    // Validar que el alumnoId sea un UUID real — sessionStorage puede tener basura
+    // en refresh raro o multi-pestaña (valor vacío, "null", token expirado, etc.)
+    if (codigo && alumnoIdRaw && UUID_REGEX.test(alumnoIdRaw)) {
+      await this.servicio.recuperarResultadoPorCodigo(codigo, alumnoIdRaw);
+      this._finalizarRecuperacion();
+      return;
+    }
+
+    if (alumnoIdRaw && !UUID_REGEX.test(alumnoIdRaw)) {
+      // Limpiar el storage corrupto
+      console.warn('[ResultadoAlumno] alumnoId corrupto en sessionStorage, limpiando:', alumnoIdRaw);
+      sessionStorage.removeItem(`proctor_alumno_${codigo}`);
+    }
+
+    // No hay datos suficientes para recuperar
+    this.cargandoResultado.set(false);
+    this.errorRecuperacion.set(
+      'No se encontraron datos de sesión. Si completaste el examen, el docente registró tu entrega.'
+    );
+    if (this._timeoutRecuperacion !== null) {
+      clearTimeout(this._timeoutRecuperacion);
+      this._timeoutRecuperacion = null;
+    }
+  }
+
+  private _finalizarRecuperacion(): void {
+    if (this._timeoutRecuperacion !== null) {
+      clearTimeout(this._timeoutRecuperacion);
+      this._timeoutRecuperacion = null;
+    }
+    this.cargandoResultado.set(false);
+    if (!this.servicio.resultadoFinal()) {
+      this.errorRecuperacion.set(
+        'No se encontró el resultado. Es posible que el examen aún esté siendo procesado.'
+      );
     }
   }
 }

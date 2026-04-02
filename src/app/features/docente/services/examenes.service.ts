@@ -86,6 +86,41 @@ export interface SesionResumen {
   examen_titulo: string;
 }
 
+// ── Tipos internos para resultados de queries ─────────────────
+
+/** Fila mínima con ID devuelta por Supabase en consultas de sub-entidades */
+interface RowWithId {
+  id: string;
+}
+
+/** Fila de sesión devuelta por cargarSesionesRecientes.
+ *  Supabase infiere el campo de FK como array; se normaliza con primeroDeArray(). */
+interface SesionConExamen {
+  id: string;
+  codigo_acceso: string;
+  estado: string;
+  iniciada_en: string | null;
+  finalizada_en: string | null;
+  examenes: { titulo: string } | { titulo: string }[] | null;
+}
+
+/**
+ * Helper seguro: Supabase infiere JOINs de FK como arrays aunque sean 1:1.
+ * Retorna el primer elemento si es array, o el valor tal cual si ya es objeto.
+ */
+function primeroDeArray<T>(val: T | T[] | null | undefined): T | null {
+  if (val == null) return null;
+  if (Array.isArray(val)) return val[0] ?? null;
+  return val;
+}
+
+/** Error tipado que Supabase puede arrojar (message siempre está presente) */
+interface SupabaseError {
+  message: string;
+  code?: string;
+  details?: string;
+}
+
 @Injectable()
 export class ExamenesService {
   private readonly supabase = inject(SupabaseService).client;
@@ -124,7 +159,7 @@ export class ExamenesService {
 
       if (error) throw error;
       this.examenes.set(data ?? []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.error.set('No se pudieron cargar los exámenes.');
       console.error('[ExamenesService.cargarExamenes]', err);
     } finally {
@@ -169,7 +204,7 @@ export class ExamenesService {
       };
 
       this.examenActivo.set(examenFormateado);
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.error.set('No se pudo cargar el examen.');
       console.error('[ExamenesService.cargarExamenCompleto]', err);
     } finally {
@@ -218,7 +253,7 @@ export class ExamenesService {
 
       await this.cargarExamenes();
       return { data: examen, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = 'Error al crear el examen. Intenta nuevamente.';
       this.error.set(msg);
       console.error('[ExamenesService.crearExamen]', err);
@@ -233,6 +268,11 @@ export class ExamenesService {
    * Estrategia: borrar todas las preguntas antiguas y re-insertar.
    * Esto simplifica el manejo de cambios en preguntas y opciones.
    *
+   * GUARDRAIL: Si el examen ya tiene sesiones con estado 'activa' o 'finalizada',
+   * se bloquea la edición para proteger la integridad del historial.
+   * Solo se permite editar si todas las sesiones están en 'esperando'
+   * (sesión creada pero aún no iniciada) o si no tiene sesiones.
+   *
    * @param examenId - UUID del examen a actualizar
    * @param payload - Nuevos datos del examen
    */
@@ -244,6 +284,25 @@ export class ExamenesService {
     this.error.set(null);
 
     try {
+      // ── 0. Guardrail: verificar si hay sesiones con historial ──
+      const { data: sesionesConHistorial, error: errGuard } = await this.supabase
+        .from('sesiones')
+        .select('id')
+        .eq('examen_id', examenId)
+        .in('estado', ['activa', 'finalizada'])
+        .limit(1);
+
+      if (errGuard) throw errGuard;
+
+      if (sesionesConHistorial && sesionesConHistorial.length > 0) {
+        const msg =
+          'No se puede editar este examen porque ya tiene sesiones iniciadas o finalizadas. ' +
+          'Crear un examen nuevo preserva la integridad del historial.';
+        this.error.set(msg);
+        this.cargando.set(false);
+        return { data: null, error: msg };
+      }
+
       // ── 1. Actualizar metadata del examen ────────────
       const { data: examen, error: errExamen } = await this.supabase
         .from('examenes')
@@ -267,7 +326,7 @@ export class ExamenesService {
         .select('id')
         .eq('examen_id', examenId);
 
-      const preguntaIdsActuales = (preguntasActuales ?? []).map((p: any) => p.id);
+      const preguntaIdsActuales = (preguntasActuales ?? []).map((p: RowWithId) => p.id);
       if (preguntaIdsActuales.length > 0) {
         await this.supabase
           .from('respuestas')
@@ -282,14 +341,14 @@ export class ExamenesService {
         .select('id')
         .eq('examen_id', examenId);
 
-      const sesionIds = (sesionesDelExamen ?? []).map((s: any) => s.id);
+      const sesionIds = (sesionesDelExamen ?? []).map((s: RowWithId) => s.id);
       if (sesionIds.length > 0) {
         const { data: sesionAlumnosData } = await this.supabase
           .from('sesion_alumnos')
           .select('id')
           .in('sesion_id', sesionIds);
 
-        const sesionAlumnoIds = (sesionAlumnosData ?? []).map((sa: any) => sa.id);
+        const sesionAlumnoIds = (sesionAlumnosData ?? []).map((sa: RowWithId) => sa.id);
         if (sesionAlumnoIds.length > 0) {
           await this.supabase
             .from('respuestas')
@@ -313,7 +372,7 @@ export class ExamenesService {
 
       await this.cargarExamenes();
       return { data: examen, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = 'Error al guardar el examen. Intenta nuevamente.';
       this.error.set(msg);
       console.error('[ExamenesService.actualizarExamen]', err);
@@ -340,7 +399,7 @@ export class ExamenesService {
         .select('id')
         .eq('examen_id', examenId);
 
-      const preguntaIds = (preguntasDelExamen ?? []).map((p: any) => p.id);
+      const preguntaIds = (preguntasDelExamen ?? []).map((p: RowWithId) => p.id);
       if (preguntaIds.length > 0) {
         await this.supabase
           .from('respuestas')
@@ -366,7 +425,7 @@ export class ExamenesService {
 
       this.examenes.update((lista) => lista.filter((e) => e.id !== examenId));
       return { data: null, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = 'No se pudo eliminar el examen. Verifica que no haya sesiones activas.';
       this.error.set(msg);
       console.error('[ExamenesService.eliminarExamen]', err);
@@ -392,13 +451,13 @@ export class ExamenesService {
         .order('iniciada_en', { ascending: false })
         .limit(15);
 
-      return (data ?? []).map((s: any) => ({
+      return (data ?? []).map((s: SesionConExamen) => ({
         id:             s.id,
         codigo_acceso:  s.codigo_acceso,
         estado:         s.estado,
         iniciada_en:    s.iniciada_en,
         finalizada_en:  s.finalizada_en,
-        examen_titulo:  s.examenes?.titulo ?? '—',
+        examen_titulo:  primeroDeArray(s.examenes)?.titulo ?? '—',
       }));
     } catch {
       return [];

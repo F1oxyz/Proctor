@@ -24,7 +24,9 @@ import {
   output,
   computed,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { startWith } from 'rxjs';
 import { GruposService } from '../../../../services/grupos.service';
 import { ModalComponent } from '../../../../../../shared/components/modal/modal.component';
 import { BtnComponent } from '../../../../../../shared/components/btn/btn.component';
@@ -178,6 +180,18 @@ export class ModalCrearGrupoComponent {
     listaAlumnos: ['', Validators.required],
   });
 
+  // ── Reactivo: valor del textarea como signal ───────────
+
+  /**
+   * Signal reactiva derivada del FormControl 'listaAlumnos'.
+   * FormControl.value NO es una Angular Signal — necesitamos toSignal()
+   * para que computed() se recalcule al escribir.
+   */
+  private readonly listaAlumnosValue = toSignal(
+    this.form.controls['listaAlumnos'].valueChanges.pipe(startWith('')),
+    { initialValue: '' }
+  );
+
   // ── Computed ───────────────────────────────────────────
 
   /**
@@ -185,7 +199,7 @@ export class ModalCrearGrupoComponent {
    * Muestra feedback inmediato al docente mientras escribe/pega.
    */
   totalAlumnosDetectados = computed(() => {
-    const texto = this.form.get('listaAlumnos')?.value ?? '';
+    const texto = this.listaAlumnosValue() ?? '';
     return texto
       .split('\n')
       .map((n: string) => n.trim())

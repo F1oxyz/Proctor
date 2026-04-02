@@ -47,6 +47,58 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
 import { FilaResultadoComponent } from './components/fila-resultado/fila-resultado.component';
 import { SesionAlumnoConDatos } from '../../../../shared/models/index';
 
+// ── Tipos internos para resultados de queries ─────────────────
+
+/**
+ * Helper seguro: Supabase infiere JOINs de FK como arrays aunque sean 1:1.
+ * Retorna el primer elemento si es array, o el valor tal cual si ya es objeto.
+ */
+function primeroDeArray<T>(val: T | T[] | null | undefined): T | null {
+  if (val == null) return null;
+  if (Array.isArray(val)) return val[0] ?? null;
+  return val;
+}
+
+/** Shape del JOIN sesiones → examenes → grupos en cargarResultados() */
+interface SesionResultadosRow {
+  id: string;
+  codigo_acceso: string;
+  iniciada_en: string | null;
+  examenes: {
+    titulo: string;
+    duracion_min: number;
+    minimo_aprobatorio: number;
+    grupos: { nombre: string } | null;
+    preguntas: Array<{ id: string }>;
+  } | null;
+}
+
+/** Shape de un alumno raw devuelto por la query sesion_alumnos.
+ *  Supabase infiere el campo de FK como array; se normaliza con primeroDeArray(). */
+interface SesionAlumnoResultadoRaw {
+  id: string;
+  alumno_id: string;
+  estado: string;
+  iniciado_en: string | null;
+  enviado_en: string | null;
+  tiempo_usado_min: number | null;
+  porcentaje: number | null;
+  total_correctas: number | null;
+  total_incorrectas: number | null;
+  alumnos: { nombre_completo: string } | { nombre_completo: string }[] | null;
+}
+
+/** Shape de una respuesta raw con JOINs a preguntas y opciones.
+ *  Supabase infiere los campos de FK como arrays; se normalizan con primeroDeArray(). */
+interface RespuestaRaw {
+  id: string;
+  es_correcta: boolean | null;
+  respuesta_abierta: string | null;
+  opcion_id: string | null;
+  preguntas: { texto: string; tipo: string } | { texto: string; tipo: string }[] | null;
+  opciones: { texto: string } | { texto: string }[] | null;
+}
+
 /** Datos de la sesión para mostrar en el encabezado */
 interface SesionInfo {
   examen_titulo: string;
@@ -189,7 +241,7 @@ interface RespuestaConDatos {
           <app-empty-state
             icono="default"
             titulo="Sin resultados aún"
-            descripcion="Ningún alumno ha enviado el examen todavía."
+            mensaje="Ningún alumno ha enviado el examen todavía."
           />
         } @else {
           <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -560,14 +612,15 @@ export class ResultadosComponent implements OnInit {
       return;
     }
 
-    const examen = (sesionData as any).examenes;
+    const row    = sesionData as unknown as SesionResultadosRow;
+    const examen = row.examenes;
 
     this.sesionInfo.set({
       examen_titulo: examen?.titulo ?? '—',
       grupo_nombre: examen?.grupos?.nombre ?? '—',
-      iniciada_en: sesionData.iniciada_en,
+      iniciada_en: row.iniciada_en,
       duracion_min: examen?.duracion_min ?? 0,
-      codigo_acceso: sesionData.codigo_acceso,
+      codigo_acceso: row.codigo_acceso,
       minimo_aprobatorio: examen?.minimo_aprobatorio ?? 60,
     });
 
@@ -600,10 +653,21 @@ export class ResultadosComponent implements OnInit {
 
     // Aplanar el join para exponer alumno_nombre directamente
     const filasEnriquecidas: SesionAlumnoConDatos[] = (alumnosData ?? []).map(
-      (sa: any) => ({
-        ...sa,
-        alumno_nombre: sa.alumnos?.nombre_completo ?? '—',
-        total_preguntas: this.totalPreguntas(), // para calcular sin_cumplir en fila
+      (sa: SesionAlumnoResultadoRaw) => ({
+        id:                sa.id,
+        sesion_id:         sesionId,
+        alumno_id:         sa.alumno_id,
+        peer_id:           null,
+        estado:            sa.estado as SesionAlumnoConDatos['estado'],
+        iniciado_en:       sa.iniciado_en,
+        enviado_en:        sa.enviado_en,
+        tiempo_usado_min:  sa.tiempo_usado_min,
+        porcentaje:        sa.porcentaje,
+        total_correctas:   sa.total_correctas,
+        total_incorrectas: sa.total_incorrectas,
+        creado_en:         '',
+        alumno_nombre:     primeroDeArray(sa.alumnos)?.nombre_completo ?? '—',
+        total_preguntas:   this.totalPreguntas(), // para calcular sin_cumplir en fila
       })
     );
 
@@ -655,15 +719,19 @@ export class ResultadosComponent implements OnInit {
       return;
     }
 
-    const enriquecidas: RespuestaConDatos[] = (data ?? []).map((r: any) => ({
-      id: r.id,
-      es_correcta: r.es_correcta,
-      respuesta_abierta: r.respuesta_abierta,
-      opcion_id: r.opcion_id,
-      pregunta_texto: r.preguntas?.texto ?? '—',
-      tipo: r.preguntas?.tipo ?? 'opcion_multiple',
-      opcion_texto: r.opciones?.texto ?? null,
-    }));
+    const enriquecidas: RespuestaConDatos[] = (data ?? []).map((r: RespuestaRaw) => {
+      const pregunta = primeroDeArray(r.preguntas);
+      const opcion   = primeroDeArray(r.opciones);
+      return {
+        id:                r.id,
+        es_correcta:       r.es_correcta,
+        respuesta_abierta: r.respuesta_abierta,
+        opcion_id:         r.opcion_id,
+        pregunta_texto:    pregunta?.texto ?? '—',
+        tipo:              (pregunta?.tipo ?? 'opcion_multiple') as RespuestaConDatos['tipo'],
+        opcion_texto:      opcion?.texto ?? null,
+      };
+    });
 
     this.respuestasAlumno.set(enriquecidas);
     this.cargandoRespuestas.set(false);

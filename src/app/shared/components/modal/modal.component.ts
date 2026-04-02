@@ -27,8 +27,10 @@ import {
   input,
   output,
   effect,
+  computed,
   booleanAttribute,
   inject,
+  DestroyRef,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 
@@ -96,6 +98,7 @@ import { DOCUMENT } from '@angular/common';
 })
 export class ModalComponent {
   private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
 
   // ── Inputs ─────────────────────────────────────────────
 
@@ -131,7 +134,8 @@ export class ModalComponent {
 
   // ── Computed ───────────────────────────────────────────
 
-  anchoClase = () => {
+  /** Clase Tailwind para el ancho máximo del panel del modal */
+  anchoClase = computed(() => {
     const anchos: Record<string, string> = {
       sm: 'max-w-sm',
       md: 'max-w-md',
@@ -139,7 +143,7 @@ export class ModalComponent {
       xl: 'max-w-xl',
     };
     return anchos[this.ancho()] ?? 'max-w-md';
-  };
+  });
 
   // ── Effects ────────────────────────────────────────────
 
@@ -151,6 +155,11 @@ export class ModalComponent {
       } else {
         this.document.body.style.overflow = '';
       }
+    });
+
+    // Restaurar overflow si el componente se destruye con el modal abierto
+    this.destroyRef.onDestroy(() => {
+      this.document.body.style.overflow = '';
     });
 
     // Cerrar con Escape

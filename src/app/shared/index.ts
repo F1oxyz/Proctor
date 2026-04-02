@@ -23,6 +23,9 @@ export { InicialesPipe } from './pipes/iniciales.pipe';
 // ── Modelos ────────────────────────────────────────────────
 export * from './models/index';
 
+// ── Utilidades ─────────────────────────────────────────────
+export { colorAvatar, getIniciales } from './utils/avatar.utils';
+
 // ── Tipos re-exportados ────────────────────────────────────
 export type { BtnVariante, BtnTamano } from './components/btn/btn.component';
 export type { EstadoBadge } from './components/badge/badge.component';
