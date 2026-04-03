@@ -29,6 +29,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { SesionesService } from '../../services/sesiones.service';
 import { PeerService } from '../../../../core/services/peer.service';
+import { calcularSegundosRestantes, tiempoAgotado } from '../../../../shared/utils/timer.utils';
 import { MonitorNavbarComponent } from './components/monitor-navbar/monitor-navbar.component';
 import { AlumnoTileComponent } from './components/alumno-tile/alumno-tile.component';
 import { SesionAlumnoConDatos } from '../../../../shared/models/index';
@@ -155,16 +156,12 @@ import { SesionAlumnoConDatos } from '../../../../shared/models/index';
               Activo ({{ conteoEstado('activo') }})
             </span>
             <span class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
-              Inactivo ({{ conteoEstado('idle') }})
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
-              Marcado ({{ conteoEstado('flagged') }})
-            </span>
-            <span class="flex items-center gap-1.5">
               <span class="w-2 h-2 rounded-full bg-slate-400 inline-block"></span>
               Desconectado ({{ conteoEstado('offline') }})
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-green-600 inline-block"></span>
+              Enviado ({{ conteoEstado('enviado') }})
             </span>
           </div>
           <span class="text-xs text-slate-400 flex items-center gap-1">
@@ -317,7 +314,18 @@ export class MonitorComponent implements OnInit, OnDestroy {
           if (!el) return;
           const stream = this.streamDeAlumno(alumno.alumno_id);
           el.srcObject = stream ?? null;
-          if (stream) el.play().catch(() => { });
+          if (stream) {
+            el.play().catch((err: unknown) => {
+              const domErr = err as DOMException;
+              if (domErr?.name === 'AbortError') {
+                console.info('[Monitor] play() expandido abortado (stream detenido):', domErr.message);
+              } else if (domErr?.name === 'NotAllowedError') {
+                console.warn('[Monitor] Autoplay bloqueado en vista expandida (NotAllowedError).');
+              } else {
+                console.error('[Monitor] Error en video expandido play():', domErr?.name ?? err);
+              }
+            });
+          }
         },
         { injector: this.injector }
       );
@@ -335,15 +343,14 @@ export class MonitorComponent implements OnInit, OnDestroy {
       .filter((a) => a.estado === 'en_progreso').length
   );
 
-  conteoEstado(estado: 'activo' | 'idle' | 'flagged' | 'offline'): number {
+  conteoEstado(estado: 'activo' | 'offline' | 'enviado'): number {
     return this.sesiones.alumnosEnSesion().filter((a) => {
       const tieneStream = this.peer.streamsPorAlumno().has(a.alumno_id);
       switch (estado) {
-        case 'activo': return tieneStream && a.estado === 'en_progreso';
+        case 'activo':  return tieneStream && a.estado !== 'enviado';
         case 'offline': return !tieneStream && a.estado !== 'enviado';
-        case 'idle': return false;
-        case 'flagged': return false;
-        default: return false;
+        case 'enviado': return a.estado === 'enviado';
+        default:        return false;
       }
     }).length;
   }
@@ -384,36 +391,32 @@ export class MonitorComponent implements OnInit, OnDestroy {
   // ── Temporizador ──────────────────────────────────────────────
 
   /**
-   * Bug 6: Calcula los segundos restantes a partir de iniciada_en.
-   * Si no hay iniciada_en, usa la duración completa.
+   * Calcula los segundos restantes a partir de iniciada_en (Bug 6).
+   * Delega en calcularSegundosRestantes() — fuente de verdad compartida.
    */
   private _configurarTemporizador(): void {
     const sesion = this.sesiones.sesionActiva();
     if (!sesion) return;
-    const duracionSeg = sesion.duracion_min * 60;
-    if (sesion.iniciada_en) {
-      const ahora = Date.now();
-      const iniciadaMs = new Date(sesion.iniciada_en).getTime();
-      const transcurridos = Math.floor((ahora - iniciadaMs) / 1000);
-      this.segundosRestantes.set(Math.max(0, duracionSeg - transcurridos));
-    } else {
-      this.segundosRestantes.set(duracionSeg);
-    }
+    this.segundosRestantes.set(
+      calcularSegundosRestantes(sesion.duracion_min, sesion.iniciada_en),
+    );
   }
 
   /**
    * Bug 3: cuando el contador llega a 0, finaliza la sesión automáticamente.
+   * Umbral unificado: tiempoAgotado() → s <= 0 (ver timer.utils.ts).
    */
   private iniciarTemporizador(): void {
     this._detenerTemporizador();
     this.intervaloTimer = setInterval(() => {
       this.segundosRestantes.update((s) => {
-        if (s <= 1) {
+        const siguiente = s - 1;
+        if (tiempoAgotado(siguiente)) {
           this._detenerTemporizador();
           void this._finalizarSesionPorTiempo();
           return 0;
         }
-        return s - 1;
+        return siguiente;
       });
     }, 1000);
   }

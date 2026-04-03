@@ -38,6 +38,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { ExamenActivoService } from '../../services/examen-activo.service';
 import { PeerService } from '../../../../core/services/peer.service';
+import { getIniciales } from '../../../../shared/utils/avatar.utils';
+import { calcularSegundosRestantes, tiempoAgotado } from '../../../../shared/utils/timer.utils';
 import { TemporizadorComponent } from './components/temporizador/temporizador.component';
 import { BarraProgresoComponent } from './components/barra-progreso/barra-progreso.component';
 import { PreguntaOpcionMultipleComponent } from './components/pregunta-opcion-multiple/pregunta-opcion-multiple.component';
@@ -299,14 +301,9 @@ export class ExamenComponent implements OnInit, OnDestroy {
   // ── Computed ─────────────────────────────────────────────────────
 
   /** Iniciales del alumno para el avatar */
-  readonly iniciales = computed(() => {
-    const nombre = this.servicio.alumno()?.nombre_completo ?? '';
-    return nombre
-      .split(' ')
-      .slice(0, 2)
-      .map((n) => n[0]?.toUpperCase() ?? '')
-      .join('');
-  });
+  readonly iniciales = computed(() =>
+    getIniciales(this.servicio.alumno()?.nombre_completo ?? '')
+  );
 
   /** true si está en la última pregunta */
   readonly esUltimaPregunta = computed(
@@ -338,16 +335,10 @@ export class ExamenComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Bug 4: calcular segundos restantes descontando el tiempo ya transcurrido
-    const totalSeg = sesion.duracion_min * 60;
-    if (sesion.iniciada_en) {
-      const ahora = Date.now();
-      const iniciadaMs = new Date(sesion.iniciada_en).getTime();
-      const transcurridos = Math.floor((ahora - iniciadaMs) / 1000);
-      this.segundosRestantes.set(Math.max(0, totalSeg - transcurridos));
-    } else {
-      this.segundosRestantes.set(totalSeg);
-    }
+    // Calcula segundos restantes descontando el tiempo ya transcurrido
+    this.segundosRestantes.set(
+      calcularSegundosRestantes(sesion.duracion_min, sesion.iniciada_en),
+    );
 
     this.iniciarTemporizador();
   }
@@ -365,11 +356,12 @@ export class ExamenComponent implements OnInit, OnDestroy {
   private iniciarTemporizador(): void {
     this.intervaloTimer = setInterval(() => {
       this.segundosRestantes.update((s) => {
-        if (s <= 0) {
+        const siguiente = s - 1;
+        if (tiempoAgotado(siguiente)) {
           this.detenerTemporizador();
           return 0;
         }
-        return s - 1;
+        return siguiente;
       });
     }, 1000);
   }

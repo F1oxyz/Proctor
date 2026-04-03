@@ -4,15 +4,16 @@
 //
 // Estados disponibles:
 //   'activo'    → Verde  - Alumno respondiendo activamente
-//   'idle'      → Naranja/Amarillo - Sin actividad por >2 min
-//   'flagged'   → Rojo   - Marcado por el maestro (sospechoso)
 //   'offline'   → Gris   - No conectado / sin pantalla compartida
-//   'enviado'   → Azul   - Examen enviado (terminó)
+//   'enviado'   → Verde oscuro - Examen enviado (terminó)
+//
+// TODO: 'idle' y 'flagged' se agregarán cuando se implementen
+//       detección de inactividad y análisis de comportamiento.
 //
 // Uso:
 //   <app-badge estado="activo" />
-//   <app-badge estado="idle" [etiqueta]="'Idle (2m)'" />
-//   <app-badge estado="flagged" />
+//   <app-badge estado="offline" />
+//   <app-badge estado="enviado" />
 // =============================================================
 
 import {
@@ -22,7 +23,7 @@ import {
   computed,
 } from '@angular/core';
 
-export type EstadoBadge = 'activo' | 'idle' | 'flagged' | 'offline' | 'enviado';
+export type EstadoBadge = 'activo' | 'offline' | 'enviado';
 
 @Component({
   selector: 'app-badge',
@@ -65,9 +66,7 @@ export class BadgeComponent {
   etiquetaMostrar = computed(() => {
     if (this.etiqueta()) return this.etiqueta();
     const textos: Record<EstadoBadge, string> = {
-      activo: 'Activo',
-      idle: 'Inactivo',
-      flagged: 'Marcado',
+      activo:  'Activo',
       offline: 'Sin conexión',
       enviado: 'Enviado',
     };
@@ -77,9 +76,7 @@ export class BadgeComponent {
   /** Clases del contenedor del badge según el estado */
   clases = computed(() => {
     const estilos: Record<EstadoBadge, string> = {
-      activo: 'bg-emerald-50 text-emerald-700',
-      idle: 'bg-amber-50 text-amber-700',
-      flagged: 'bg-red-50 text-red-700',
+      activo:  'bg-emerald-50 text-emerald-700',
       offline: 'bg-gray-100 text-gray-500',
       enviado: 'bg-brand/10 text-brand',
     };
@@ -89,9 +86,7 @@ export class BadgeComponent {
   /** Clases del punto indicador según el estado */
   puntoCl = computed(() => {
     const puntos: Record<EstadoBadge, string> = {
-      activo: 'bg-emerald-500',
-      idle: 'bg-amber-500',
-      flagged: 'bg-red-500',
+      activo:  'bg-emerald-500',
       offline: 'bg-gray-400',
       enviado: 'bg-brand',
     };

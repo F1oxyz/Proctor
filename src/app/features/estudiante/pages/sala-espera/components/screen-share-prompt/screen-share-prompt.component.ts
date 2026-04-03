@@ -147,11 +147,26 @@ export class ScreenSharePromptComponent {
     this.solicitando.set(true);
     this.errorMensaje.set(null);
 
-    // Verificar soporte del navegador
+    // Verificar soporte del navegador con detección específica de plataforma
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      this.errorMensaje.set(
-        'Tu navegador no soporta compartir pantalla. Usa Chrome o Edge.'
-      );
+      const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const esSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+      if (esIOS) {
+        this.errorMensaje.set(
+          'iOS no soporta compartir pantalla desde el navegador. ' +
+          'Usá Safari en una Mac o Chrome/Edge en una computadora.'
+        );
+      } else if (esSafari) {
+        this.errorMensaje.set(
+          'Safari no soporta compartir pantalla en esta versión. ' +
+          'Actualizá a Safari 13+ o usá Chrome/Edge.'
+        );
+      } else {
+        this.errorMensaje.set(
+          'Tu navegador no soporta compartir pantalla. Usá Chrome, Edge o Firefox.'
+        );
+      }
       this.solicitando.set(false);
       this.pantallaCancelada.emit();
       return;
@@ -168,27 +183,58 @@ export class ScreenSharePromptComponent {
         audio: false, // no necesitamos audio
       });
 
-      // Escuchar cuando el usuario detiene manualmente desde el navegador
-      stream.getVideoTracks()[0].addEventListener('ended', () => {
-        this.pantallaCancelada.emit();
+      // Registrar 'ended' en TODOS los video tracks, no solo el primero
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener('ended', () => {
+          this.pantallaCancelada.emit();
+        }, { once: true });
       });
 
       this.pantallaCompartida.emit(stream);
 
-    } catch (error: any) {
-      // NotAllowedError: usuario rechazó el permiso
-      // NotFoundError: no hay pantalla disponible
-      if (error?.name === 'NotAllowedError') {
-        this.errorMensaje.set(
-          'Debes aceptar compartir tu pantalla para continuar con el examen.'
-        );
-      } else {
-        this.errorMensaje.set(
-          'No se pudo iniciar la compartición de pantalla. Intenta de nuevo.'
-        );
+    } catch (error: unknown) {
+      const err = error as DOMException;
+      console.error('[ScreenSharePrompt] getDisplayMedia error:', err);
+
+      switch (err?.name) {
+        case 'NotAllowedError':
+          // Usuario canceló el diálogo o denegó el permiso explícitamente
+          this.errorMensaje.set(
+            'Debés aceptar compartir tu pantalla para continuar con el examen.'
+          );
+          break;
+
+        case 'NotFoundError':
+          // No hay pantallas disponibles para compartir
+          this.errorMensaje.set(
+            'No se encontró ninguna pantalla disponible para compartir. ' +
+            'Verificá que tengas al menos un monitor conectado.'
+          );
+          break;
+
+        case 'NotSupportedError':
+          // Contexto inseguro (no-HTTPS) o funcionalidad no soportada
+          this.errorMensaje.set(
+            'Tu navegador o contexto de red no permite compartir pantalla. ' +
+            'Asegurate de estar en una conexión segura (HTTPS).'
+          );
+          break;
+
+        case 'InvalidStateError':
+          // El stream ya fue cerrado o el estado interno es inválido
+          this.errorMensaje.set(
+            'Hubo un problema interno con la compartición de pantalla. ' +
+            'Recargá la página e intentá de nuevo.'
+          );
+          break;
+
+        default:
+          this.errorMensaje.set(
+            'No se pudo iniciar la compartición de pantalla. Intentá de nuevo.'
+          );
       }
+
       this.pantallaCancelada.emit();
-      console.error('[ScreenSharePrompt] getDisplayMedia error:', error);
     }
 
     this.solicitando.set(false);

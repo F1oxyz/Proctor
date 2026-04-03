@@ -41,6 +41,9 @@ export class AuthService {
   /**
    * Registro de nuevo docente con email + contraseña institucional.
    * El trigger de Supabase auto-crea el registro en la tabla `maestros`.
+   *
+   * Con confirm email desactivado en Supabase, el signup devuelve sesión
+   * inmediatamente. En ese caso navegamos directo al dashboard docente.
    */
   async registrarDocente(nombreCompleto: string, email: string, password: string) {
     this.loading.set(true);
@@ -58,10 +61,11 @@ export class AuthService {
       if (data.session) {
         this.session.set(data.session);
         this.currentUser.set(data.session.user);
+        await this.router.navigate(['/docente/grupos']);
       }
 
       return { data, error: null };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { data: null, error };
     } finally {
       this.loading.set(false);
@@ -85,7 +89,7 @@ export class AuthService {
 
       await this.router.navigate(['/docente/grupos']);
       return { data, error: null };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { data: null, error };
     } finally {
       this.loading.set(false);

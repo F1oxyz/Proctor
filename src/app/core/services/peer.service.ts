@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { WEBRTC_PEER_CONFIG } from '../webrtc.config';
 
 type PeerInstance    = import('peerjs').Peer;
 type MediaConnection = import('peerjs').MediaConnection;
@@ -46,6 +47,9 @@ export class PeerService {
   async inicializarComoReceptor(sesionId: string): Promise<void> {
     if (this._retryCount === 0) this.destruir();
 
+    // Validar soporte WebRTC antes de intentar cargar PeerJS
+    if (!this._validarWebRTC()) return;
+
     this.inicializando.set(true);
     this.error.set(null);
 
@@ -53,19 +57,14 @@ export class PeerService {
       const { Peer } = await import('peerjs');
       const peerId   = `proctor-${sesionId.slice(0, 8)}`;
 
-      this.peer = new Peer(peerId, {
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-          ],
-        },
-      });
+      this.peer = new Peer(peerId, { config: WEBRTC_PEER_CONFIG });
 
       this.peer.on('open', (id) => {
         this.miPeerId.set(id);
         this.inicializando.set(false);
         this.listo.set(true);
+        // Limpiar error previo si la reconexión fue exitosa
+        this.error.set(null);
         this._retryCount = 0;
         console.log(`[PeerService] Receptor listo: ${id}`);
       });
@@ -97,7 +96,9 @@ export class PeerService {
       });
 
       this.peer.on('disconnected', () => {
-        console.warn('[PeerService] Desconectado. Reconectando...');
+        console.warn('[PeerService] Desconectado del servidor de señalización. Reconectando...');
+        // Marcar como no listo mientras reconecta — estado honesto
+        this.listo.set(false);
         this.peer?.reconnect();
       });
 
@@ -177,6 +178,9 @@ export class PeerService {
     alumnoId:  string,
     sesionId:  string,
   ): Promise<string | null> {
+    // Validar soporte WebRTC antes de intentar cargar PeerJS
+    if (!this._validarWebRTC()) return null;
+
     this._streamAlumno      = stream;
     this._reconexionIntento = 0;
 
@@ -185,14 +189,7 @@ export class PeerService {
       const peerIdAlumno = `alumno-${alumnoId.slice(0, 8)}-${Date.now()}`;
       const peerIdDocente = `proctor-${sesionId.slice(0, 8)}`;
 
-      this.peer = new Peer(peerIdAlumno, {
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-          ],
-        },
-      });
+      this.peer = new Peer(peerIdAlumno, { config: WEBRTC_PEER_CONFIG });
 
       return new Promise<string | null>((resolve) => {
 
@@ -248,9 +245,34 @@ export class PeerService {
       return;
     }
 
+    // Registrar 'ended' en TODOS los video tracks (no solo el primero)
     // { once: true } evita acumular listeners en cada reintento
-    stream.getVideoTracks()[0]?.addEventListener('ended', () => llamada.close(), { once: true });
+    stream.getVideoTracks().forEach((track) => {
+      track.addEventListener('ended', () => llamada.close(), { once: true });
+    });
     console.log(`[PeerService] Llamando a ${peerIdDocente} (intento ${this._reconexionIntento + 1})`);
+  }
+
+  // ── Validación de soporte ────────────────────────────────────────
+
+  /**
+   * Verifica que el navegador soporte WebRTC antes de intentar usar PeerJS.
+   * Retorna true si está soportado; false si no (y setea el signal `error`).
+   */
+  private _validarWebRTC(): boolean {
+    if (typeof window === 'undefined') return false;
+
+    if (!window.RTCPeerConnection) {
+      const mensaje =
+        'Tu navegador no soporta WebRTC. ' +
+        'Usá Chrome, Edge o Firefox para la transmisión de pantalla.';
+      this.error.set(mensaje);
+      this.inicializando.set(false);
+      console.error('[PeerService] RTCPeerConnection no disponible en este navegador.');
+      return false;
+    }
+
+    return true;
   }
 
   // ── Limpieza ─────────────────────────────────────────────────────

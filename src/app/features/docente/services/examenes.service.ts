@@ -532,15 +532,16 @@ export class ExamenesService {
 
   /**
    * Sube un archivo de imagen al bucket `question-images`.
+   * El archivo ya llega optimizado (WebP) desde el componente.
    * Retorna la URL pública o null si falló.
    */
   async subirImagenPregunta(file: File): Promise<string | null> {
-    const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'webp';
     const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const { error } = await this.supabase.storage
       .from('question-images')
-      .upload(path, file, { upsert: false });
+      .upload(path, file, { upsert: false, contentType: file.type });
 
     if (error) {
       console.error('[ExamenesService] subirImagenPregunta:', error);

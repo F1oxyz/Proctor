@@ -34,6 +34,7 @@ import {
 } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { getIniciales } from '../../utils/avatar.utils';
 
 @Component({
   selector: 'app-navbar',
@@ -190,26 +191,14 @@ export class NavbarComponent {
    * Iniciales del docente autenticado para el avatar.
    * Usa el nombre guardado en Supabase Auth metadata.
    */
-  inicialesUsuario = computed(() => {
-    const nombre = this.auth.currentUser()?.user_metadata?.['full_name'] ?? '';
-    if (!nombre) return '?';
-    const palabras = nombre.trim().split(/\s+/);
-    return palabras.length >= 2
-      ? (palabras[0][0] + palabras[1][0]).toUpperCase()
-      : palabras[0][0].toUpperCase();
-  });
+  inicialesUsuario = computed(() =>
+    getIniciales(this.auth.currentUser()?.user_metadata?.['full_name'] ?? '')
+  );
 
   /**
    * Iniciales del alumno para el avatar en modo student.
    */
-  inicialesAlumno = computed(() => {
-    const nombre = this.alumnoNombre();
-    if (!nombre) return '?';
-    const palabras = nombre.trim().split(/\s+/);
-    return palabras.length >= 2
-      ? (palabras[0][0] + palabras[1][0]).toUpperCase()
-      : palabras[0][0].toUpperCase();
-  });
+  inicialesAlumno = computed(() => getIniciales(this.alumnoNombre() ?? ''));
 
   // ── Métodos ────────────────────────────────────────────
 

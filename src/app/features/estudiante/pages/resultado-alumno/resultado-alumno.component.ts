@@ -34,6 +34,7 @@ import {
 import { RouterLink, ActivatedRoute } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { ExamenActivoService } from '../../services/examen-activo.service';
+import { getIniciales } from '../../../../shared/utils/avatar.utils';
 
 /** UUID v4 regex — igual que en session.guard.ts */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -294,10 +295,9 @@ export class ResultadoAlumnoComponent implements OnInit, OnDestroy {
   );
 
   /** Iniciales del alumno para el avatar */
-  readonly iniciales = computed(() => {
-    const nombre = this.servicio.alumno()?.nombre_completo ?? '';
-    return nombre.split(' ').slice(0, 2).map((n) => n[0]?.toUpperCase() ?? '').join('');
-  });
+  readonly iniciales = computed(() =>
+    getIniciales(this.servicio.alumno()?.nombre_completo ?? '')
+  );
 
   /**
    * Cantidad de preguntas "cumplidas" = correctas + incorrectas respondidas

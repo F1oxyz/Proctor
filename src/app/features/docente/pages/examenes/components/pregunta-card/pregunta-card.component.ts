@@ -25,6 +25,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ExamenesService, PreguntaPayload, OpcionPayload } from '../../../../services/examenes.service';
+import { esImagenValida, optimizarImagen } from '../../../../../../shared/utils/image.utils';
 
 const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
 
@@ -181,7 +182,7 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
             <input
               [id]="'img-input-' + numero()"
               type="file"
-              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
               class="hidden"
               (change)="onSeleccionarImagen($event)"
             />
@@ -412,23 +413,31 @@ export class PreguntaCardComponent implements OnInit {
 
   // ── Feature 2: imagen ──────────────────────────────────
 
-  /** Sube la imagen seleccionada al bucket de Supabase Storage */
+  /** Optimiza y sube la imagen seleccionada al bucket de Supabase Storage */
   async onSeleccionarImagen(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
 
-    // Validación de tamaño (5 MB máx)
-    if (file.size > 5 * 1024 * 1024) {
-      this.errorImagen.set('La imagen no debe superar 5 MB.');
-      input.value = '';
+    input.value = ''; // reset inmediato para permitir re-seleccionar el mismo archivo
+
+    if (!esImagenValida(file)) {
+      this.errorImagen.set('Formato no válido. Usá JPG, PNG o WebP.');
+      return;
+    }
+
+    // Límite generoso antes de optimizar (el archivo original puede ser grande)
+    if (file.size > 20 * 1024 * 1024) {
+      this.errorImagen.set('La imagen no debe superar 20 MB.');
       return;
     }
 
     this.subiendoImagen.set(true);
     this.errorImagen.set(null);
 
-    const url = await this.examenesService.subirImagenPregunta(file);
+    const { file: archivoOptimizado } = await optimizarImagen(file);
+
+    const url = await this.examenesService.subirImagenPregunta(archivoOptimizado);
 
     if (url) {
       this.imagenUrl.set(url);
@@ -438,7 +447,6 @@ export class PreguntaCardComponent implements OnInit {
     }
 
     this.subiendoImagen.set(false);
-    input.value = ''; // reset para permitir re-seleccionar el mismo archivo
   }
 
   /** Elimina la imagen actual del bucket y limpia el estado */

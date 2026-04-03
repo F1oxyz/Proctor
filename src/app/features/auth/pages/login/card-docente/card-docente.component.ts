@@ -287,7 +287,8 @@ export class CardDocenteComponent {
     const { email, password } = this.loginForm.value;
     const { error } = await this.auth.iniciarSesion(email!, password!);
     if (error) {
-      this.errorMsg.set(this.traducirError(error.message));
+      const mensaje = error instanceof Error ? error.message : 'Ocurrió un error. Intenta nuevamente.';
+      this.errorMsg.set(this.traducirError(mensaje));
     }
   }
 
@@ -301,9 +302,8 @@ export class CardDocenteComponent {
     const { nombre, email, password } = this.registroForm.value;
     const { error } = await this.auth.registrarDocente(nombre!, email!, password!);
     if (error) {
-      this.errorMsg.set(this.traducirError(error.message));
-    } else {
-      this.exitoMsg.set('Cuenta creada. Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.');
+      const mensaje = error instanceof Error ? error.message : 'Ocurrió un error. Intenta nuevamente.';
+      this.errorMsg.set(this.traducirError(mensaje));
     }
   }
 

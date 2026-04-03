@@ -7,6 +7,7 @@
 // =============================================================
 
 import { Pipe, PipeTransform } from '@angular/core';
+import { getIniciales } from '../utils/avatar.utils';
 
 @Pipe({
   name: 'iniciales',
@@ -15,21 +16,12 @@ import { Pipe, PipeTransform } from '@angular/core';
 export class InicialesPipe implements PipeTransform {
   /**
    * Extrae hasta 2 iniciales en mayúsculas de un nombre completo.
+   * Delega en getIniciales() de avatar.utils para tener una única fuente de verdad.
    * @param nombre - Nombre completo. Ej: "Juan Pérez García"
    * @returns Iniciales en mayúsculas. Ej: "JP"
-   *          Si el nombre está vacío, retorna "??"
+   *          Si el nombre está vacío, retorna "?"
    */
   transform(nombre: string | null | undefined): string {
-    if (!nombre?.trim()) return '??';
-
-    const palabras = nombre.trim().split(/\s+/);
-
-    if (palabras.length === 1) {
-      // Un solo nombre: primera letra
-      return palabras[0].charAt(0).toUpperCase();
-    }
-
-    // Tomar primera letra del primer nombre y primer letra del primer apellido
-    return (palabras[0].charAt(0) + palabras[1].charAt(0)).toUpperCase();
+    return getIniciales(nombre ?? '');
   }
 }
