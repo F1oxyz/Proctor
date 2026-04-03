@@ -1,20 +1,4 @@
-// =============================================================
-// features/docente/pages/grupos/components/modal-crear-grupo/
-// modal-crear-grupo.component.ts
-//
-// Modal para crear un nuevo grupo o materia.
-// El maestro ingresa:
-//   - Nombre del grupo (ej: "Dibujo Industrial - 2do Cuatri")
-//   - Lista de alumnos: pega nombres desde Excel, uno por línea
-//
-// Al guardar:
-//   1. Valida que los campos no estén vacíos
-//   2. Llama a GruposService.crearGrupo()
-//   3. Emite (grupoCreado) para que GruposComponent recargue la vista
-//   4. Se cierra automáticamente en caso de éxito
-//
-// Usa ModalComponent de shared para el wrapper visual.
-// =============================================================
+
 
 import {
   Component,
@@ -156,48 +140,22 @@ import { Grupo } from '../../../../../../shared/models';
 })
 export class ModalCrearGrupoComponent {
   readonly gruposService = inject(GruposService);
-  private readonly fb = inject(FormBuilder);
+  private readonly fb    = inject(FormBuilder);
 
-  // ── Estado interno ─────────────────────────────────────
-
-  /** Controla si el modal está visible. Se activa desde GruposComponent */
-  abierto = signal(false);
-
-  // ── Outputs ────────────────────────────────────────────
-
-  /**
-   * Emitido cuando el grupo se crea exitosamente.
-   * GruposComponent lo escucha para recargar la tabla.
-   */
+  abierto     = signal(false);
   grupoCreado = output<Grupo>();
 
-  // ── Formulario ─────────────────────────────────────────
-
   form = this.fb.group({
-    /** Nombre del grupo o materia */
-    nombre: ['', [Validators.required, Validators.minLength(2)]],
-    /** Texto con nombres separados por \n */
+    nombre:       ['', [Validators.required, Validators.minLength(2)]],
     listaAlumnos: ['', Validators.required],
   });
 
-  // ── Reactivo: valor del textarea como signal ───────────
-
-  /**
-   * Signal reactiva derivada del FormControl 'listaAlumnos'.
-   * FormControl.value NO es una Angular Signal — necesitamos toSignal()
-   * para que computed() se recalcule al escribir.
-   */
+  // FormControl.value NO es Signal — toSignal() para que computed() reaccione al escribir
   private readonly listaAlumnosValue = toSignal(
     this.form.controls['listaAlumnos'].valueChanges.pipe(startWith('')),
     { initialValue: '' }
   );
 
-  // ── Computed ───────────────────────────────────────────
-
-  /**
-   * Cuenta cuántos alumnos válidos hay en el textarea en tiempo real.
-   * Muestra feedback inmediato al docente mientras escribe/pega.
-   */
   totalAlumnosDetectados = computed(() => {
     const texto = this.listaAlumnosValue() ?? '';
     return texto
@@ -206,22 +164,17 @@ export class ModalCrearGrupoComponent {
       .filter((n: string) => n.length > 0).length;
   });
 
-  // ── Métodos públicos ───────────────────────────────────
-
-  /** Abre el modal y resetea el formulario */
   abrir() {
     this.form.reset();
     this.abierto.set(true);
   }
 
-  /** Cierra el modal si no hay una operación en curso */
   onCerrar() {
     if (this.gruposService.cargando()) return;
     this.abierto.set(false);
     this.form.reset();
   }
 
-  /** Valida y envía el formulario al servicio */
   async guardar() {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -241,9 +194,6 @@ export class ModalCrearGrupoComponent {
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────
-
-  /** Determina si un campo debe mostrar error visual */
   campoInvalido(campo: string): boolean {
     const ctrl = this.form.get(campo);
     return !!ctrl && ctrl.invalid && (ctrl.dirty || ctrl.touched);

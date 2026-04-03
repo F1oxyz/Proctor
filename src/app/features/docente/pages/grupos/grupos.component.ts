@@ -1,24 +1,4 @@
-// =============================================================
-// features/docente/pages/grupos/grupos.component.ts
-//
-// Página principal de gestión de grupos del docente autenticado.
-// Es la primera pantalla que ve el maestro tras iniciar sesión.
-//
-// Funcionalidades:
-//   - Stats en cards: Total Alumnos, Exámenes Activos, Promedio General
-//   - Tabs: Grupos Activos | Archivados | Pendientes (solo Activos funcional por ahora)
-//   - Lista de grupos en tarjetas con:
-//       · Nombre del grupo
-//       · Conteo de alumnos
-//       · Botón de ver alumnos (expande la tabla)
-//       · Botón de eliminar grupo
-//   - Tabla de alumnos expandible por grupo (TablaAlumnosComponent)
-//   - Botón "+ Crear Nuevo Grupo" que abre ModalCrearGrupoComponent
-//   - Estado vacío si no hay grupos (EmptyStateComponent)
-//
-// Provee GruposService en su propio injector (no en root)
-// para que su estado se destruya al salir de esta ruta.
-// =============================================================
+
 
 import {
   Component,
@@ -42,9 +22,7 @@ import { Alumno, GrupoConStats } from '../../../../shared/models';
 @Component({
   selector: 'app-grupos',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  // GruposService vive en el injector de este componente.
-  // Se destruye al navegar fuera de /docente/grupos.
-  providers: [GruposService],
+  providers: [GruposService], // scope local: se destruye al salir de la ruta
   imports: [
     NavbarComponent,
     BtnComponent,
@@ -57,7 +35,6 @@ import { Alumno, GrupoConStats } from '../../../../shared/models';
   template: `
     <div class="min-h-screen bg-gray-50 flex flex-col">
 
-      <!-- Navbar en modo docente -->
       <app-navbar modo="default" />
 
       <!-- Contenido principal -->
@@ -173,8 +150,7 @@ import { Alumno, GrupoConStats } from '../../../../shared/models';
                   <!-- ── Header de la tarjeta del grupo ── -->
                   <div class="flex items-center justify-between px-5 py-4">
                     <div class="flex items-center gap-3">
-                      <!-- Ícono del grupo -->
-                      <div class="w-9 h-9 rounded-lg bg-brand/10 flex items-center justify-center shrink-0">
+                                <div class="w-9 h-9 rounded-lg bg-brand/10 flex items-center justify-center shrink-0">
                         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="var(--color-brand)"><path d="M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z"/></svg>
                       </div>
                       <div>
@@ -185,9 +161,7 @@ import { Alumno, GrupoConStats } from '../../../../shared/models';
                       </div>
                     </div>
 
-                    <!-- Acciones del grupo -->
                     <div class="flex items-center gap-2">
-                      <!-- Ver/Ocultar alumnos -->
                       <button
                         (click)="toggleAlumnos(grupo)"
                         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
@@ -204,7 +178,6 @@ import { Alumno, GrupoConStats } from '../../../../shared/models';
                         {{ grupoExpandido() === grupo.id ? 'Ocultar' : 'Ver alumnos' }}
                       </button>
 
-                      <!-- Eliminar grupo -->
                       <button
                         (click)="confirmarEliminar(grupo)"
                         class="p-1.5 rounded-md text-slate-400 hover:text-red-500
@@ -380,78 +353,39 @@ import { Alumno, GrupoConStats } from '../../../../shared/models';
 export class GruposComponent implements OnInit {
   readonly gruposService = inject(GruposService);
 
-  // ── Referencias a componentes hijos ────────────────────
-
-  /** Referencia al modal de crear grupo para poder abrirlo desde el botón */
   private readonly modalCrear = viewChild.required<ModalCrearGrupoComponent>('modalCrear');
 
-  // ── Estado interno ─────────────────────────────────────
-
-  /** Tab activo: 'activos' | 'archivados' | 'pendientes' */
-  tabActivo = signal<'activos' | 'archivados' | 'pendientes'>('activos');
-
-  /** ID del grupo cuya tabla de alumnos está expandida (null = ninguno) */
+  tabActivo      = signal<'activos' | 'archivados' | 'pendientes'>('activos');
   grupoExpandido = signal<string | null>(null);
-
-  /** Grupo pendiente de eliminar (muestra diálogo de confirmación) */
   grupoAEliminar = signal<GrupoConStats | null>(null);
 
-  // ── Estado para acciones sobre alumnos individuales ────
-
-  /** Alumno en edición de nombre */
-  alumnoAEditar = signal<Alumno | null>(null);
-
-  /** Alumno pendiente de eliminar */
+  alumnoAEditar   = signal<Alumno | null>(null);
   alumnoAEliminar = signal<Alumno | null>(null);
-
-  /** Nombre temporal en el input de edición */
-  nombreEditado = '';
-
-  /** Indica si hay una operación sobre un alumno en curso */
+  nombreEditado   = '';
   guardandoAlumno = signal(false);
-
-  /** Error de operación sobre un alumno */
-  errorAlumno = signal<string | null>(null);
-
-  // ── Lifecycle ──────────────────────────────────────────
+  errorAlumno     = signal<string | null>(null);
 
   ngOnInit() {
-    // Cargar grupos al montar el componente
     this.gruposService.cargarGrupos();
   }
 
-  // ── Métodos ────────────────────────────────────────────
-
-  /** Abre el modal de crear grupo */
   abrirModalCrear() {
     this.modalCrear().abrir();
   }
 
-  /**
-   * Expande o colapsa la tabla de alumnos de un grupo.
-   * Si el grupo ya estaba expandido, lo colapsa.
-   * Si es otro grupo, carga sus alumnos desde Supabase.
-   */
   async toggleAlumnos(grupo: GrupoConStats) {
     if (this.grupoExpandido() === grupo.id) {
-      // Colapsar
       this.grupoExpandido.set(null);
       return;
     }
-    // Expandir y cargar alumnos
     this.grupoExpandido.set(grupo.id);
     await this.gruposService.cargarAlumnos(grupo.id);
   }
 
-  /**
-   * Muestra el diálogo de confirmación de eliminación.
-   * La eliminación real ocurre en eliminarGrupo().
-   */
   confirmarEliminar(grupo: GrupoConStats) {
     this.grupoAEliminar.set(grupo);
   }
 
-  /** Ejecuta la eliminación tras confirmación del usuario */
   async eliminarGrupo() {
     const grupo = this.grupoAEliminar();
     if (!grupo) return;
@@ -459,7 +393,6 @@ export class GruposComponent implements OnInit {
     const { error } = await this.gruposService.eliminarGrupo(grupo.id);
 
     if (!error) {
-      // Si el grupo eliminado era el expandido, colapsar la tabla
       if (this.grupoExpandido() === grupo.id) {
         this.grupoExpandido.set(null);
       }
@@ -467,31 +400,21 @@ export class GruposComponent implements OnInit {
     }
   }
 
-  /**
-   * Callback cuando el modal emite grupoCreado.
-   * Los grupos ya se recargan en el servicio, solo cerramos estado local.
-   */
-  onGrupoCreado() {
-    // El servicio ya recargó los grupos internamente.
-    // Aquí se puede agregar feedback adicional si se requiere (toast, etc.)
-  }
+  // Grupos ya se recargan en el servicio; este callback existe para
+  // poder agregar feedback adicional (toast, etc.) en el futuro.
+  onGrupoCreado() {}
 
-  // ── Acciones sobre alumnos individuales ────────────────
-
-  /** Abre el modal de edición de nombre del alumno */
   onEditarAlumno(alumno: Alumno): void {
     this.alumnoAEditar.set(alumno);
     this.nombreEditado = alumno.nombre_completo;
     this.errorAlumno.set(null);
   }
 
-  /** Cierra el modal de edición sin guardar */
   cerrarModalEditarAlumno(): void {
     this.alumnoAEditar.set(null);
     this.errorAlumno.set(null);
   }
 
-  /** Guarda el nuevo nombre del alumno en Supabase */
   async guardarNombreAlumno(): Promise<void> {
     const alumno = this.alumnoAEditar();
     if (!alumno) return;
@@ -515,13 +438,11 @@ export class GruposComponent implements OnInit {
     }
   }
 
-  /** Muestra el diálogo de confirmación de eliminación del alumno */
   confirmarEliminarAlumno(alumno: Alumno): void {
     this.alumnoAEliminar.set(alumno);
     this.errorAlumno.set(null);
   }
 
-  /** Ejecuta la eliminación del alumno tras confirmación */
   async ejecutarEliminarAlumno(): Promise<void> {
     const alumno = this.alumnoAEliminar();
     if (!alumno) return;

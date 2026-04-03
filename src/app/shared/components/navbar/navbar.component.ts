@@ -1,28 +1,9 @@
-// =============================================================
-// shared/components/navbar/navbar.component.ts
-// Barra de navegación principal con 3 modos de visualización:
-//
-//  'default'  → Navbar del docente autenticado.
-//               Muestra logo, links de navegación y avatar.
-//
-//  'monitor'  → Navbar de la sala de monitoreo en vivo.
-//               Muestra nombre del grupo/examen, estado de sesión,
-//               tiempo restante y botón "Terminar Sesión".
-//               Emite (terminarSesion) al hacer clic en el botón.
-//
-//  'student'  → Navbar minimalista del alumno durante el examen.
-//               Solo muestra el nombre del alumno y el temporizador.
-//               Sin links de navegación para evitar distracciones.
-//
-// Uso:
-//   <app-navbar modo="default" />
-//   <app-navbar modo="monitor"
-//     [grupoNombre]="'Dibujo Industrial A'"
-//     [examenNombre]="'Examen Final'"
-//     [estadoSesion]="'activa'"
-//     (terminarSesion)="onTerminar()" />
-//   <app-navbar modo="student" [alumnoNombre]="'Juan Pérez'" />
-// =============================================================
+/**
+ * Navbar con 3 modos:
+ *  'default'  → docente autenticado (links + avatar)
+ *  'monitor'  → sala en vivo (nombre examen/grupo + "Terminar Sesión")
+ *  'student'  → alumno durante el examen (minimalista, sin links)
+ */
 
 import {
   Component,
@@ -45,7 +26,6 @@ import { getIniciales } from '../../utils/avatar.utils';
       class="w-full bg-white border-b border-gray-100 px-6 h-14 flex items-center justify-between"
       [attr.aria-label]="'Barra de navegación'"
     >
-      <!-- ── LOGO (siempre visible) ─────────────────────── -->
       <div class="flex items-center gap-2 shrink-0">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-md flex items-center justify-center">
@@ -55,11 +35,7 @@ import { getIniciales } from '../../utils/avatar.utils';
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════
-           MODO DEFAULT — Docente autenticado
-      ══════════════════════════════════════════════════ -->
       @if (modo() === 'default') {
-        <!-- Links de navegación -->
         <div class="flex items-center gap-1" role="navigation" aria-label="Navegación del docente">
           <a
             routerLink="/docente/grupos"
@@ -82,7 +58,6 @@ import { getIniciales } from '../../utils/avatar.utils';
           </a>
         </div>
 
-        <!-- Avatar + cerrar sesión -->
         <button
           (click)="cerrarSesion()"
           class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-slate-600
@@ -90,30 +65,22 @@ import { getIniciales } from '../../utils/avatar.utils';
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
         >
-          <!-- Avatar con iniciales -->
           <div class="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
             {{ inicialesUsuario() }}
           </div>
-          <!-- Ícono logout -->
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"/>
           </svg>
         </button>
       }
 
-      <!-- ══════════════════════════════════════════════════
-           MODO MONITOR — Sala de monitoreo en vivo
-      ══════════════════════════════════════════════════ -->
       @if (modo() === 'monitor') {
-        <!-- Info del examen activo -->
         <div class="flex items-center gap-3 text-sm">
-          <!-- Indicador de sesión en vivo -->
           <span class="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
             En vivo
           </span>
 
-          <!-- Nombre del examen y grupo -->
           @if (examenNombre()) {
             <span class="text-slate-700 font-medium">{{ examenNombre() }}</span>
           }
@@ -122,7 +89,6 @@ import { getIniciales } from '../../utils/avatar.utils';
           }
         </div>
 
-        <!-- Botón terminar sesión -->
         <button
           (click)="terminarSesion.emit()"
           class="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium
@@ -130,7 +96,6 @@ import { getIniciales } from '../../utils/avatar.utils';
                  hover:bg-red-100 transition-colors cursor-pointer"
           aria-label="Terminar sesión de examen"
         >
-          <!-- Ícono stop -->
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
           </svg>
@@ -138,11 +103,7 @@ import { getIniciales } from '../../utils/avatar.utils';
         </button>
       }
 
-      <!-- ══════════════════════════════════════════════════
-           MODO STUDENT — Alumno durante el examen
-      ══════════════════════════════════════════════════ -->
       @if (modo() === 'student') {
-        <!-- Nombre del alumno -->
         <div class="flex items-center gap-2 text-sm">
           <div class="w-7 h-7 rounded-full bg-brand/10 flex items-center justify-center text-xs font-semibold text-brand">
             {{ inicialesAlumno() }}
@@ -152,7 +113,6 @@ import { getIniciales } from '../../utils/avatar.utils';
           }
         </div>
 
-        <!-- Espacio vacío a la derecha (limpieza visual durante el examen) -->
         <div aria-hidden="true"></div>
       }
 
@@ -162,47 +122,19 @@ import { getIniciales } from '../../utils/avatar.utils';
 export class NavbarComponent {
   private readonly auth = inject(AuthService);
 
-  // ── Inputs ─────────────────────────────────────────────
-
-  /** Modo de visualización del navbar. Default: 'default' */
-  modo = input<'default' | 'monitor' | 'student'>('default');
-
-  /** [Modo monitor] Nombre del grupo en curso */
-  grupoNombre = input<string>('');
-
-  /** [Modo monitor] Nombre del examen en curso */
+  modo         = input<'default' | 'monitor' | 'student'>('default');
+  grupoNombre  = input<string>('');
   examenNombre = input<string>('');
-
-  /** [Modo student] Nombre completo del alumno */
   alumnoNombre = input<string>('');
 
-  // ── Outputs ────────────────────────────────────────────
-
-  /**
-   * [Modo monitor] Emitido cuando el maestro hace clic en "Terminar Sesión".
-   * El componente padre (MonitorComponent) es responsable de hacer la llamada
-   * a sesiones.service para cerrar la sesión en Supabase.
-   */
+  /** [Monitor] El padre (MonitorComponent) maneja el cierre real en Supabase. */
   terminarSesion = output<void>();
 
-  // ── Computed ───────────────────────────────────────────
-
-  /**
-   * Iniciales del docente autenticado para el avatar.
-   * Usa el nombre guardado en Supabase Auth metadata.
-   */
   inicialesUsuario = computed(() =>
     getIniciales(this.auth.currentUser()?.user_metadata?.['full_name'] ?? '')
   );
-
-  /**
-   * Iniciales del alumno para el avatar en modo student.
-   */
   inicialesAlumno = computed(() => getIniciales(this.alumnoNombre() ?? ''));
 
-  // ── Métodos ────────────────────────────────────────────
-
-  /** Llama al AuthService para cerrar sesión y redirigir al login */
   cerrarSesion() {
     this.auth.cerrarSesion();
   }

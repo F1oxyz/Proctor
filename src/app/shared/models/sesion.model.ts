@@ -79,3 +79,20 @@ export interface SesionAlumnoConDatos extends SesionAlumno {
   /** Nombre completo del alumno aplanado desde alumnos.nombre_completo */
   alumno_nombre: string;
 }
+
+// ─── SesionResumen ────────────────────────────────────────
+
+/**
+ * Sesión resumida para historiales y listas de sesiones recientes.
+ * Se usa tanto en ExamenesService (historial) como en SesionesService (listados).
+ * No es una tabla real: se obtiene con un SELECT + JOIN examenes(titulo).
+ */
+export interface SesionResumen {
+  id: string;
+  codigo_acceso: string;
+  estado: string;          // 'esperando' | 'activa' | 'finalizada'
+  iniciada_en: string | null;
+  finalizada_en: string | null;
+  /** Título del examen asociado (aplanado desde examenes.titulo) */
+  examen_titulo: string;
+}

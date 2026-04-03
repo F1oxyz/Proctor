@@ -1,25 +1,16 @@
-// =============================================================
-// shared/components/modal/modal.component.ts
-// Wrapper reutilizable para modales con backdrop, animación
-// de entrada y soporte para teclado (Escape para cerrar).
-//
-// Estructura interna via content projection:
-//   - [modal-header] → Título y descripción del modal
-//   - (contenido sin selector) → Cuerpo del modal
-//   - [modal-footer] → Botones de acción (Cancelar / Guardar)
-//
-// El modal maneja su propio backdrop y bloquea el scroll del body.
-//
-// Uso:
-//   <app-modal [abierto]="mostrarModal()" (cerrar)="mostrarModal.set(false)">
-//     <h2 modal-header>Crear Nuevo Grupo</h2>
-//     <p>Contenido del modal...</p>
-//     <div modal-footer>
-//       <app-btn variante="secondary" (clicked)="cerrar()">Cancelar</app-btn>
-//       <app-btn variante="primary" (clicked)="guardar()">Guardar</app-btn>
-//     </div>
-//   </app-modal>
-// =============================================================
+/**
+ * Modal reutilizable con backdrop, animación de entrada y soporte Escape.
+ * Content projection: [modal-header] | (body) | [modal-footer]
+ *
+ * Uso:
+ *   <app-modal [abierto]="mostrarModal()" (cerrar)="mostrarModal.set(false)">
+ *     <h2 modal-header>Título</h2>
+ *     <p>Cuerpo del modal...</p>
+ *     <div modal-footer>
+ *       <app-btn variante="primary" (clicked)="guardar()">Guardar</app-btn>
+ *     </div>
+ *   </app-modal>
+ */
 
 import {
   Component,
@@ -38,8 +29,7 @@ import { DOCUMENT } from '@angular/common';
   selector: 'app-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    // El host no debe tener posición; el overlay es absoluto dentro del portal
-    'class': 'contents',
+    'class': 'contents', // no debe tener posición propia; overlay es absoluto
   },
   template: `
     @if (abierto()) {
@@ -100,41 +90,16 @@ export class ModalComponent {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
 
-  // ── Inputs ─────────────────────────────────────────────
-
-  /** Controla si el modal está visible */
-  abierto = input(false, { transform: booleanAttribute });
-
-  /**
-   * Ancho máximo del modal.
-   * 'sm' = max-w-sm, 'md' = max-w-md (default), 'lg' = max-w-lg, 'xl' = max-w-xl
-   */
-  ancho = input<'sm' | 'md' | 'lg' | 'xl'>('md');
-
-  /**
-   * Si true, muestra el botón X en la esquina superior derecha.
-   * Default: true
-   */
-  mostrarCerrar = input(true, { transform: booleanAttribute });
-
-  /**
-   * Si true, hacer clic en el backdrop cierra el modal.
-   * Default: true. Poner en false para modales críticos (ej: confirmar borrar).
-   */
+  abierto               = input(false, { transform: booleanAttribute });
+  ancho                 = input<'sm' | 'md' | 'lg' | 'xl'>('md');
+  mostrarCerrar         = input(true, { transform: booleanAttribute });
+  /** Poner en false para modales destructivos donde no se debe cerrar por accidente. */
   cerrarAlClickBackdrop = input(true, { transform: booleanAttribute });
 
-  // ── Outputs ────────────────────────────────────────────
-
-  /**
-   * Emitido cuando el usuario quiere cerrar el modal
-   * (clic en X, backdrop, o tecla Escape).
-   * El padre decide si realmente cierra actualizando [abierto].
-   */
+  /** El padre decide si realmente cierra actualizando [abierto]. */
   cerrar = output<void>();
 
-  // ── Computed ───────────────────────────────────────────
-
-  /** Clase Tailwind para el ancho máximo del panel del modal */
+  /** Clase Tailwind para el ancho máximo del panel */
   anchoClase = computed(() => {
     const anchos: Record<string, string> = {
       sm: 'max-w-sm',
@@ -145,10 +110,7 @@ export class ModalComponent {
     return anchos[this.ancho()] ?? 'max-w-md';
   });
 
-  // ── Effects ────────────────────────────────────────────
-
   constructor() {
-    // Bloquear scroll del body cuando el modal está abierto
     effect(() => {
       if (this.abierto()) {
         this.document.body.style.overflow = 'hidden';
@@ -157,26 +119,22 @@ export class ModalComponent {
       }
     });
 
-    // Restaurar overflow si el componente se destruye con el modal abierto
+    // Restaurar overflow si el componente se destruye con el modal todavía abierto
     this.destroyRef.onDestroy(() => {
       this.document.body.style.overflow = '';
     });
 
-    // Cerrar con Escape
     effect(() => {
       if (this.abierto()) {
         const handler = (e: KeyboardEvent) => {
           if (e.key === 'Escape') this.cerrar.emit();
         };
         this.document.addEventListener('keydown', handler);
-        // Cleanup: se llama cuando el efecto se destruye o re-ejecuta
         return () => this.document.removeEventListener('keydown', handler);
       }
       return;
     });
   }
-
-  // ── Métodos ────────────────────────────────────────────
 
   onBackdropClick() {
     if (this.cerrarAlClickBackdrop()) {

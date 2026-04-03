@@ -1,19 +1,7 @@
-/**
- * examen-activo.service.ts
- * ─────────────────────────────────────────────────────────────────
- * BUGS CORREGIDOS:
- *  - Bug 1: Flujo de unión → nuevo método unirseASala() con estado 'unido'
- *           iniciarExamen() actualiza el registro existente si ya se unió
- *  - Bug 4: SesionActiva incluye iniciada_en para sincronizar el temporizador
- *  - Bug 6: Polling de respaldo cada 4 s cuando la sesión está 'esperando'
- *           (por si Realtime no está configurado en Supabase)
- * ─────────────────────────────────────────────────────────────────
- */
+
 
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { SupabaseService } from '../../../core/services/supabase.service';
-
-// ── Tipos internos para resultados de queries ─────────────────
 
 /** Shape del JOIN sesiones → examenes en cargarSesionPorCodigo() */
 interface SesionPorCodigoRow {
@@ -30,14 +18,12 @@ interface SesionPorCodigoRow {
   } | null;
 }
 
-/** Shape del payload NEW que Supabase Realtime envía en UPDATE de sesiones */
 interface SesionRealtimePayload {
   estado?: string;
   iniciada_en?: string | null;
   [key: string]: unknown;
 }
 
-/** Shape de pregunta raw con opciones devuelta por cargarPreguntas() */
 interface PreguntaRaw {
   id: string;
   texto: string;
@@ -51,9 +37,6 @@ interface PreguntaRaw {
   }> | null;
 }
 
-// ── Tipos locales ─────────────────────────────────────────────────
-
-/** Opción de respuesta tal como viene de la DB */
 export interface OpcionActiva {
   id: string;
   texto: string;
@@ -61,7 +44,6 @@ export interface OpcionActiva {
   orden: number;
 }
 
-/** Pregunta con sus opciones */
 export interface PreguntaActiva {
   id: string;
   texto: string;
@@ -71,13 +53,11 @@ export interface PreguntaActiva {
   opciones: OpcionActiva[];
 }
 
-/** Datos del alumno seleccionado de la lista */
 export interface AlumnoActivo {
   id: string;
   nombre_completo: string;
 }
 
-/** Datos de la sesión cargada por código de acceso */
 export interface SesionActiva {
   id: string;
   examen_id: string;
@@ -87,11 +67,10 @@ export interface SesionActiva {
   /** Porcentaje mínimo (0-100) para aprobar. Viene de examenes.minimo_aprobatorio */
   minimo_aprobatorio: number;
   codigo_acceso: string;
-  estado: string;        // 'esperando' | 'activa' | 'finalizada'
-  iniciada_en: string | null;  // Bug 4: cuándo inició el examen
+  estado: string;       // 'esperando' | 'activa' | 'finalizada'
+  iniciada_en: string | null;
 }
 
-/** Respuesta guardada localmente mientras el alumno navega */
 export interface RespuestaLocal {
   pregunta_id: string;
   opcion_id: string | null;
@@ -99,7 +78,6 @@ export interface RespuestaLocal {
   respondido_en: string;
 }
 
-/** Resultado final calculado al enviar */
 export interface ResultadoFinal {
   porcentaje: number;
   total_correctas: number;
@@ -121,33 +99,27 @@ function fisherYates<T>(arr: T[]): T[] {
 
 @Injectable()
 export class ExamenActivoService {
-  // ── Dependencias ────────────────────────────────────────────────
   private readonly supabase = inject(SupabaseService);
 
-  // ── Canales Realtime y polling ────────────────────────────────────
   private _canalEstadoSesion: ReturnType<typeof this.supabase.client.channel> | null = null;
   private _pollInterval: ReturnType<typeof setInterval> | null = null;
-
-  /** true cuando Realtime confirmó SUBSCRIBED para el canal de estado de sesión */
+  /** true cuando Realtime confirmó SUBSCRIBED — indica que el polling no es necesario */
   private _realtimeEstadoActivo = false;
 
-  // ── Estado principal (signals) ───────────────────────────────────
-
-  readonly sesion         = signal<SesionActiva | null>(null);
-  readonly alumno         = signal<AlumnoActivo | null>(null);
-  readonly listaAlumnos   = signal<AlumnoActivo[]>([]);
-  readonly preguntas      = signal<PreguntaActiva[]>([]);
+  readonly sesion               = signal<SesionActiva | null>(null);
+  readonly alumno               = signal<AlumnoActivo | null>(null);
+  readonly listaAlumnos         = signal<AlumnoActivo[]>([]);
+  readonly preguntas            = signal<PreguntaActiva[]>([]);
   readonly indicePreguntaActual = signal(0);
-  readonly respuestas     = signal<Map<string, RespuestaLocal>>(new Map());
-  readonly sesionAlumnoId = signal<string | null>(null);
-  readonly tiempoInicio   = signal<number | null>(null);
-  readonly resultadoFinal = signal<ResultadoFinal | null>(null);
-  readonly cargando       = signal(false);
-  readonly error          = signal<string | null>(null);
-  /** Error transitorio al guardar una respuesta (se limpia al guardar OK) */
-  readonly errorGuardado  = signal<string | null>(null);
+  readonly respuestas           = signal<Map<string, RespuestaLocal>>(new Map());
+  readonly sesionAlumnoId       = signal<string | null>(null);
+  readonly tiempoInicio         = signal<number | null>(null);
+  readonly resultadoFinal       = signal<ResultadoFinal | null>(null);
+  readonly cargando             = signal(false);
+  readonly error                = signal<string | null>(null);
+  /** Error transitorio de guardado — se limpia al siguiente upsert exitoso */
+  readonly errorGuardado        = signal<string | null>(null);
 
-  // ── Computed ─────────────────────────────────────────────────────
 
   readonly preguntaActual = computed(() => {
     const lista = this.preguntas();
@@ -170,17 +142,11 @@ export class ExamenActivoService {
     () => this.respuestas().size >= this.preguntas().length
   );
 
-  // ── Métodos públicos ────────────────────────────────────────────
 
-  /**
-   * Carga los datos de la sesión a partir del código de acceso.
-   * También carga la lista de alumnos del grupo para el dropdown.
-   */
   async cargarSesionPorCodigo(codigo: string): Promise<boolean> {
     this.cargando.set(true);
     this.error.set(null);
 
-    // Bug 4: incluir iniciada_en en la query
     const { data: sesionData, error: sesionError } = await this.supabase.client
       .from('sesiones')
       .select(`
@@ -228,7 +194,6 @@ export class ExamenActivoService {
       iniciada_en:        row.iniciada_en ?? null,
     });
 
-    // Bug 6: Realtime + polling de respaldo para detectar cambio de estado
     this._suscribirseACambiosEstado(sesionData.id);
     if (sesionData.estado === 'esperando') {
       this._iniciarPolling(sesionData.id);
@@ -252,8 +217,9 @@ export class ExamenActivoService {
   }
 
   /**
-   * Bug 1: Registra al alumno en la sala de espera con estado 'unido'.
-   * El profesor lo verá en el monitor. Se llama antes de iniciarExamen().
+   * Registra al alumno en sesion_alumnos con estado 'unido'.
+   * El docente lo verá en el monitor antes de que inicie el examen.
+   * Llamar antes de iniciarExamen().
    */
   async unirseASala(alumno: AlumnoActivo, peerId = ''): Promise<boolean> {
     const sesion = this.sesion();
@@ -279,7 +245,7 @@ export class ExamenActivoService {
 
     if (error) {
       if (error.code === '23505') {
-        // Ya existía un registro (recargó la página), reutilizarlo
+        // Duplicate key: recargó la página, reutilizar el registro existente
         const { data: existente } = await this.supabase.client
           .from('sesion_alumnos')
           .select('id')
@@ -304,9 +270,7 @@ export class ExamenActivoService {
     return true;
   }
 
-  /**
-   * Carga las preguntas del examen en orden aleatorio.
-   */
+
   async cargarPreguntas(examenId: string): Promise<boolean> {
     this.cargando.set(true);
     this.error.set(null);
@@ -344,9 +308,9 @@ export class ExamenActivoService {
   }
 
   /**
-   * Bug 1: Inicia el examen formal del alumno.
-   * Si ya se unió (sesionAlumnoId está seteado), actualiza el registro existente.
-   * Si no se unió todavía, inserta uno nuevo.
+   * Inicia el examen. Si el alumno ya pasó por la sala de espera
+   * (sesionAlumnoId está seteado), actualiza el registro de 'unido' a 'en_progreso'.
+   * Si no, inserta directamente.
    */
   async iniciarExamen(alumno: AlumnoActivo, peerId = ''): Promise<boolean> {
     const sesion = this.sesion();
@@ -362,7 +326,6 @@ export class ExamenActivoService {
     const sesionAlumnoExistenteId = this.sesionAlumnoId();
 
     if (sesionAlumnoExistenteId) {
-      // Bug 1: Ya se unió con 'unido' → actualizar a 'en_progreso'
       const { error } = await this.supabase.client
         .from('sesion_alumnos')
         .update({
@@ -379,7 +342,7 @@ export class ExamenActivoService {
         return false;
       }
     } else {
-      // Flujo sin sala de espera previa: INSERT directo
+      // Sin sala de espera previa: INSERT directo
       const { data, error } = await this.supabase.client
         .from('sesion_alumnos')
         .insert({
@@ -418,17 +381,14 @@ export class ExamenActivoService {
     }
 
     this.tiempoInicio.set(Date.now());
-    this._detenerPolling(); // Ya en el examen, no necesitamos polling de espera
+    this._detenerPolling();
 
     const ok = await this.cargarPreguntas(sesion.examen_id);
     this.cargando.set(false);
     return ok;
   }
 
-  /**
-   * Actualiza el peer_id de un registro sesion_alumnos en DB.
-   * Se usa para parchar el peer_id cuando PeerJS tardó en inicializar.
-   */
+  /** Parchea el peer_id cuando PeerJS terminó de inicializar después de unirseASala(). */
   async actualizarPeerId(sesionAlumnoId: string, peerId: string): Promise<void> {
     const { error } = await this.supabase.client
       .from('sesion_alumnos')
@@ -441,9 +401,8 @@ export class ExamenActivoService {
   }
 
   /**
-   * Guarda la respuesta de la pregunta actual en mapa local y en Supabase.
-   * Retorna `true` si el guardado en la DB fue exitoso, `false` si falló.
-   * En caso de fallo, setea `errorGuardado` con un mensaje visible para la UI.
+   * Guarda la respuesta en memoria local (optimista) y en Supabase.
+   * Retorna false si el upsert falló y setea `errorGuardado` para la UI.
    */
   async guardarRespuesta(
     opcionId: string | null,
@@ -454,7 +413,6 @@ export class ExamenActivoService {
 
     if (!pregunta || !sesionAlumno) return false;
 
-    // Limpiar error previo de guardado
     this.errorGuardado.set(null);
 
     const registro: RespuestaLocal = {
@@ -464,7 +422,6 @@ export class ExamenActivoService {
       respondido_en:     new Date().toISOString(),
     };
 
-    // Actualizar estado local OPTIMÍSTICAMENTE
     this.respuestas.update((mapa) => {
       const nuevo = new Map(mapa);
       nuevo.set(pregunta.id, registro);
@@ -551,9 +508,9 @@ export class ExamenActivoService {
           totalIncorrectas++;
         }
       } else {
-        // Pregunta abierta: requiere revisión manual del docente
+        // Abierta: provisionalmente correcta si tiene texto (revisión manual del docente)
         if (respuesta.respuesta_abierta?.trim()) {
-          totalCorrectas++; // Provisionalmente correcta hasta revisión
+          totalCorrectas++;
         } else {
           totalSinContestar++;
         }
@@ -602,10 +559,7 @@ export class ExamenActivoService {
     return resultado;
   }
 
-  /**
-   * Recupera el resultado de Supabase usando el ID de sesion_alumnos.
-   * Se usa cuando el alumno recarga la página en /resultado.
-   */
+  /** Recupera el resultado desde Supabase. Usado cuando el alumno recarga /resultado. */
   async recuperarResultado(sesionAlumnoId: string): Promise<void> {
     const { data } = await this.supabase.client
       .from('sesion_alumnos')
@@ -626,10 +580,7 @@ export class ExamenActivoService {
     });
   }
 
-  /**
-   * Recupera el resultado usando el código de sesión y el ID del alumno.
-   * Fallback cuando sesionAlumnoId no está en memoria (recarga completa).
-   */
+  /** Fallback: recupera el resultado cuando sesionAlumnoId no está en memoria (recarga completa). */
   async recuperarResultadoPorCodigo(codigo: string, alumnoId: string): Promise<void> {
     const { data: sesion } = await this.supabase.client
       .from('sesiones')
@@ -676,8 +627,6 @@ export class ExamenActivoService {
     this.errorGuardado.set(null);
   }
 
-  // ── Realtime ──────────────────────────────────────────────────────
-
   private _suscribirseACambiosEstado(sesionId: string): void {
     this._desuscribirseDeEstado();
 
@@ -699,7 +648,6 @@ export class ExamenActivoService {
             this.sesion.update((s) =>
               s ? { ...s, estado: nuevoEstado, iniciada_en: nuevaIniciada ?? s.iniciada_en } : null
             );
-            // Si ya está activa, detener el polling
             if (nuevoEstado === 'activa') this._detenerPolling();
           }
         }
@@ -707,11 +655,10 @@ export class ExamenActivoService {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           this._realtimeEstadoActivo = true;
-          // Realtime confirmado → el polling ya no es necesario
           this._detenerPolling();
           console.log(`[ExamenActivoService] Realtime activo para sesión: ${sesionId}`);
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          // Realtime falló → reactivar polling si la sesión aún está esperando
+          // Realtime no disponible → polling de respaldo
           this._realtimeEstadoActivo = false;
           if (this.sesion()?.estado === 'esperando') {
             this._iniciarPolling(sesionId);
@@ -730,8 +677,8 @@ export class ExamenActivoService {
   }
 
   /**
-   * Bug 6: Polling de respaldo cada 4 s cuando la sesión está 'esperando'.
-   * Garantiza que el estado se actualice aunque Realtime no esté configurado.
+   * Polling de respaldo cada 4 s para cuando Realtime no está disponible.
+   * Se detiene automáticamente cuando la sesión cambia de 'esperando'.
    */
   private _iniciarPolling(sesionId: string): void {
     this._detenerPolling();

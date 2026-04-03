@@ -25,6 +25,7 @@ export * from './models/index';
 
 // ── Utilidades ─────────────────────────────────────────────
 export { colorAvatar, getIniciales } from './utils/avatar.utils';
+export { primeroDeArray } from './utils/supabase.utils';
 
 // ── Tipos re-exportados ────────────────────────────────────
 export type { BtnVariante, BtnTamano } from './components/btn/btn.component';

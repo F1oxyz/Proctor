@@ -33,6 +33,7 @@ import { calcularSegundosRestantes, tiempoAgotado } from '../../../../shared/uti
 import { MonitorNavbarComponent } from './components/monitor-navbar/monitor-navbar.component';
 import { AlumnoTileComponent } from './components/alumno-tile/alumno-tile.component';
 import { SesionAlumnoConDatos } from '../../../../shared/models/index';
+import { playStream } from '../../../../shared/utils/video.utils';
 
 @Component({
   selector: 'app-monitor',
@@ -312,20 +313,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
         () => {
           const el = this.videoExpandidoEl()?.nativeElement;
           if (!el) return;
-          const stream = this.streamDeAlumno(alumno.alumno_id);
-          el.srcObject = stream ?? null;
-          if (stream) {
-            el.play().catch((err: unknown) => {
-              const domErr = err as DOMException;
-              if (domErr?.name === 'AbortError') {
-                console.info('[Monitor] play() expandido abortado (stream detenido):', domErr.message);
-              } else if (domErr?.name === 'NotAllowedError') {
-                console.warn('[Monitor] Autoplay bloqueado en vista expandida (NotAllowedError).');
-              } else {
-                console.error('[Monitor] Error en video expandido play():', domErr?.name ?? err);
-              }
-            });
-          }
+          playStream(el, this.streamDeAlumno(alumno.alumno_id), '[Monitor:expandido]');
         },
         { injector: this.injector }
       );

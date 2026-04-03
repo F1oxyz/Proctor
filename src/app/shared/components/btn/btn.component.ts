@@ -1,25 +1,8 @@
-// =============================================================
-// shared/components/btn/btn.component.ts
-// Botón reutilizable con variantes de estilo, tamaños y estado
-// de carga (spinner animado).
-//
-// Variantes:
-//   'primary'   → Blaze Orange (acciones principales)
-//   'secondary' → Contorno gris (acciones secundarias)
-//   'danger'    → Rojo (acciones destructivas)
-//   'ghost'     → Transparente con texto (acciones terciarias)
-//   'dark'      → Slate-800 oscuro (Iniciar Sesión, Crear Cuenta)
-//
-// Tamaños:
-//   'sm'  → py-1.5 text-xs
-//   'md'  → py-2.5 text-sm (default)
-//   'lg'  → py-3 text-base
-//
-// Uso:
-//   <app-btn variante="primary" (clicked)="guardar()">Guardar</app-btn>
-//   <app-btn variante="danger" [loading]="guardando()">Eliminar</app-btn>
-//   <app-btn variante="secondary" tipo="button">Cancelar</app-btn>
-// =============================================================
+/**
+ * Botón reutilizable con variantes, tamaños y estado de carga.
+ * Variantes: primary | secondary | danger | ghost | dark
+ * Tamaños: sm | md (default) | lg
+ */
 
 import {
   Component,
@@ -38,8 +21,7 @@ export type BtnTipo = 'button' | 'submit' | 'reset';
   selector: 'app-btn',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    // El host es display:contents para no romper layouts flex/grid del padre
-    'class': 'contents',
+    'class': 'contents', // display:contents para no romper layouts flex/grid del padre
   },
   template: `
     <button
@@ -50,7 +32,6 @@ export type BtnTipo = 'button' | 'submit' | 'reset';
       [attr.aria-disabled]="disabled() || loading()"
       [attr.aria-busy]="loading()"
     >
-      <!-- Spinner de carga -->
       @if (loading()) {
         <svg
           class="animate-spin shrink-0"
@@ -63,40 +44,20 @@ export type BtnTipo = 'button' | 'submit' | 'reset';
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
         </svg>
       }
-      <!-- Contenido proyectado (texto, íconos, etc.) -->
       <ng-content />
     </button>
   `,
 })
 export class BtnComponent {
-  // ── Inputs ─────────────────────────────────────────────
-
-  /** Variante de estilo del botón. Default: 'primary' */
-  variante = input<BtnVariante>('primary');
-
-  /** Tamaño del botón. Default: 'md' */
-  tamano = input<BtnTamano>('md');
-
-  /** Tipo HTML del botón. Default: 'button' */
-  tipo = input<BtnTipo>('button');
-
-  /** Si true, muestra un spinner y deshabilita el botón */
-  loading = input(false, { transform: booleanAttribute });
-
-  /** Si true, deshabilita el botón sin mostrar spinner */
-  disabled = input(false, { transform: booleanAttribute });
-
-  /** Si true, el botón ocupa el 100% del ancho del contenedor */
+  variante  = input<BtnVariante>('primary');
+  tamano    = input<BtnTamano>('md');
+  tipo      = input<BtnTipo>('button');
+  loading   = input(false, { transform: booleanAttribute });
+  disabled  = input(false, { transform: booleanAttribute });
   fullWidth = input(false, { transform: booleanAttribute });
 
-  // ── Outputs ────────────────────────────────────────────
-
-  /** Emitido al hacer clic (solo si no está disabled ni loading) */
   clicked = output<void>();
 
-  // ── Computed ───────────────────────────────────────────
-
-  /** Tamaño del ícono del spinner según el tamaño del botón */
   iconSize = computed(() => {
     const sizes: Record<BtnTamano, string> = {
       sm: 'w-3 h-3',
@@ -106,7 +67,6 @@ export class BtnComponent {
     return sizes[this.tamano()];
   });
 
-  /** Clases de Tailwind calculadas según variante, tamaño y estado */
   clases = computed(() => {
     const base = [
       'inline-flex items-center justify-center gap-2',
@@ -115,14 +75,12 @@ export class BtnComponent {
       'disabled:cursor-not-allowed',
     ];
 
-    // Tamaños
     const tamanos: Record<BtnTamano, string> = {
       sm: 'px-3 py-1.5 text-xs',
       md: 'px-4 py-2.5 text-sm',
       lg: 'px-5 py-3 text-base',
     };
 
-    // Variantes
     const variantes: Record<BtnVariante, string> = {
       primary:
         'bg-brand text-white hover:bg-brand/90 active:bg-brand/80 disabled:bg-brand/30 focus:ring-brand',

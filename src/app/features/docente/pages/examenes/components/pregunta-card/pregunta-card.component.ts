@@ -1,18 +1,4 @@
-// =============================================================
-// pregunta-card.component.ts
-//
-// BUG 5 CORREGIDO: tipo estaba hardcodeado → toggle entre tipos
-// BUG 9 CORREGIDO: opciones dinámicas (inician en 2, máximo 4)
-//   - Botón "Agregar opción" visible cuando < 4 opciones
-//   - Botón "×" para eliminar una opción cuando > 2
-//   - Ninguna opción puede quedar vacía (validación)
-//
-// FEATURE 2: imagen opcional por pregunta
-//   - El docente puede adjuntar una imagen desde su dispositivo
-//   - La imagen se sube a Supabase Storage (bucket question-images)
-//   - Preview con botón de eliminar
-//   - La URL se emite en el PreguntaPayload
-// =============================================================
+
 
 import {
   Component,
@@ -67,7 +53,7 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
       <!-- ── Cuerpo ─────────────────────── -->
       <div class="px-5 py-4 flex flex-col gap-4">
 
-        <!-- Selector de tipo de pregunta (Bug 5) -->
+
         <div class="flex gap-2">
           <button
             type="button"
@@ -126,21 +112,19 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
           }
         </div>
 
-        <!-- ── Imagen opcional (Feature 2) ─── -->
+
         <div class="flex flex-col gap-2">
           <span class="text-xs font-medium text-slate-600">
             Imagen <span class="text-slate-400">(Opcional)</span>
           </span>
 
           @if (imagenUrl()) {
-            <!-- Preview de la imagen subida -->
             <div class="relative group rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
               <img
                 [src]="imagenUrl()!"
                 alt="Imagen de la pregunta"
                 class="w-full max-h-48 object-contain"
               />
-              <!-- Botón eliminar -->
               <button
                 type="button"
                 (click)="eliminarImagen()"
@@ -156,7 +140,6 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
               </button>
             </div>
           } @else {
-            <!-- Botón / zona de upload -->
             <label
               [for]="'img-input-' + numero()"
               class="flex items-center gap-2 px-3 py-2.5 border border-dashed border-gray-300
@@ -238,8 +221,7 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
                     class="flex-1 bg-transparent text-sm text-slate-700 placeholder-slate-400 focus:outline-none min-w-0"
                     [attr.aria-label]="'Texto de opción ' + letras[i]"
                   />
-                  <!-- Bug 9: botón eliminar (solo si hay más de 2 opciones) -->
-                  @if (opciones.length > 2) {
+                   @if (opciones.length > 2) {
                     <button
                       type="button"
                       (click)="eliminarOpcion(i)"
@@ -255,7 +237,6 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
               }
             </div>
 
-            <!-- Bug 9: botón agregar opción (solo si < 4 opciones) -->
             @if (opciones.length < 4) {
               <button
                 type="button"
@@ -277,7 +258,6 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
           </div>
         }
 
-        <!-- Información para texto abierto -->
         @if (tipoActual() === 'texto_abierto') {
           <div class="flex items-start gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
             <svg class="w-4 h-4 text-slate-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -295,43 +275,27 @@ const LETRAS_OPCIONES = ['A', 'B', 'C', 'D'] as const;
   `,
 })
 export class PreguntaCardComponent implements OnInit {
-  // ── Dependencias ───────────────────────────────────────
   private readonly examenesService = inject(ExamenesService);
 
-  // ── Inputs ─────────────────────────────────────────────
-  numero = input.required<number>();
+  numero          = input.required<number>();
   preguntaInicial = input<PreguntaPayload | null>(null);
 
-  // ── Outputs ────────────────────────────────────────────
   eliminar = output<void>();
-  cambio = output<PreguntaPayload>();
+  cambio   = output<PreguntaPayload>();
 
-  // ── Estado interno ─────────────────────────────────────
-
-  textoPregunta = '';
+  textoPregunta     = '';
   opcionCorrectaIdx = -1;
 
-  /** Bug 9: empezar con 2 opciones, máximo 4 */
-  opciones: { texto: string }[] = [
-    { texto: '' }, { texto: '' },
-  ];
+  // mínimo 2 opciones, máximo 4
+  opciones: { texto: string }[] = [{ texto: '' }, { texto: '' }];
 
-  /** Bug 5: tipo de pregunta seleccionado */
-  readonly tipoActual = signal<'opcion_multiple' | 'texto_abierto'>('opcion_multiple');
-
-  readonly tocado = signal(false);
-  readonly letras = LETRAS_OPCIONES;
-
-  // ── Estado imagen (Feature 2) ──────────────────────────
-
-  /** URL pública de la imagen subida (null si no hay) */
-  readonly imagenUrl = signal<string | null>(null);
-  /** true mientras se sube la imagen a Storage */
+  readonly tipoActual    = signal<'opcion_multiple' | 'texto_abierto'>('opcion_multiple');
+  readonly tocado        = signal(false);
+  readonly letras        = LETRAS_OPCIONES;
+  readonly imagenUrl     = signal<string | null>(null);
   readonly subiendoImagen = signal(false);
-  /** Mensaje de error si la imagen no se pudo subir */
-  readonly errorImagen = signal<string | null>(null);
+  readonly errorImagen   = signal<string | null>(null);
 
-  // ── Lifecycle ──────────────────────────────────────────
 
   ngOnInit() {
     const inicial = this.preguntaInicial();
@@ -340,7 +304,6 @@ export class PreguntaCardComponent implements OnInit {
       this.tipoActual.set(inicial.tipo);
       this.imagenUrl.set(inicial.imagen_url ?? null);
       if (inicial.tipo === 'opcion_multiple' && inicial.opciones.length > 0) {
-        // Bug 9: cargar exactamente las opciones guardadas
         this.opciones = inicial.opciones.map((op) => ({ texto: op.texto }));
         // Garantizar mínimo 2 opciones
         while (this.opciones.length < 2) this.opciones.push({ texto: '' });
@@ -350,8 +313,6 @@ export class PreguntaCardComponent implements OnInit {
       }
     }
   }
-
-  // ── Computed helpers ───────────────────────────────────
 
   esValida(): boolean {
     if (!this.textoPregunta.trim()) return false;
@@ -374,9 +335,6 @@ export class PreguntaCardComponent implements OnInit {
     );
   }
 
-  // ── Métodos ────────────────────────────────────────────
-
-  /** Bug 5: cambia tipo y resetea estado irrelevante */
   cambiarTipo(tipo: 'opcion_multiple' | 'texto_abierto'): void {
     this.tipoActual.set(tipo);
     if (tipo === 'texto_abierto') {
@@ -390,7 +348,6 @@ export class PreguntaCardComponent implements OnInit {
     this.emitirCambio();
   }
 
-  /** Bug 9: agregar una opción (hasta máximo 4) */
   agregarOpcion(): void {
     if (this.opciones.length < 4) {
       this.opciones.push({ texto: '' });
@@ -398,10 +355,8 @@ export class PreguntaCardComponent implements OnInit {
     }
   }
 
-  /** Bug 9: eliminar una opción (mínimo 2) */
   eliminarOpcion(idx: number): void {
     if (this.opciones.length <= 2) return;
-    // Ajustar índice de respuesta correcta
     if (this.opcionCorrectaIdx === idx) {
       this.opcionCorrectaIdx = -1;
     } else if (this.opcionCorrectaIdx > idx) {
@@ -411,22 +366,19 @@ export class PreguntaCardComponent implements OnInit {
     this.emitirCambio();
   }
 
-  // ── Feature 2: imagen ──────────────────────────────────
 
-  /** Optimiza y sube la imagen seleccionada al bucket de Supabase Storage */
   async onSeleccionarImagen(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
 
-    input.value = ''; // reset inmediato para permitir re-seleccionar el mismo archivo
+    input.value = ''; // reset para poder re-seleccionar el mismo archivo
 
     if (!esImagenValida(file)) {
       this.errorImagen.set('Formato no válido. Usá JPG, PNG o WebP.');
       return;
     }
 
-    // Límite generoso antes de optimizar (el archivo original puede ser grande)
     if (file.size > 20 * 1024 * 1024) {
       this.errorImagen.set('La imagen no debe superar 20 MB.');
       return;
@@ -449,7 +401,6 @@ export class PreguntaCardComponent implements OnInit {
     this.subiendoImagen.set(false);
   }
 
-  /** Elimina la imagen actual del bucket y limpia el estado */
   async eliminarImagen(): Promise<void> {
     const url = this.imagenUrl();
     if (!url) return;

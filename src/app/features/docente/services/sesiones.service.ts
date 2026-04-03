@@ -1,32 +1,10 @@
-/**
- * sesiones.service.ts
- * ─────────────────────────────────────────────────────────────────
- * Servicio del módulo Docente para gestionar el ciclo de vida
- * completo de una sesión de examen.
- *
- * CAMBIOS:
- *  - Bug 7: crearSesion() crea con estado 'esperando' (no 'activa')
- *  - Bug 7: iniciarExamenActivo() cambia estado a 'activa' y fija iniciada_en
- *  - Bug 10: cargarSesion() obtiene total de alumnos del grupo
- * ─────────────────────────────────────────────────────────────────
- */
+
 
 import { Injectable, inject, signal } from '@angular/core';
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { SesionAlumnoConDatos } from '../../../shared/models/index';
-
-// ── Tipos internos para resultados de queries ─────────────────
-
-/**
- * Helper seguro: Supabase infiere JOINs de FK como arrays aunque sean 1:1.
- * Retorna el primer elemento si es array, o el valor tal cual si ya es objeto.
- */
-function primeroDeArray<T>(val: T | T[] | null | undefined): T | null {
-  if (val == null) return null;
-  if (Array.isArray(val)) return val[0] ?? null;
-  return val;
-}
+import { primeroDeArray } from '../../../shared/utils/supabase.utils';
 
 /** Shape del JOIN sesiones → examenes → grupos en cargarSesion() */
 interface SesionQueryRow {
@@ -42,8 +20,7 @@ interface SesionQueryRow {
   } | null;
 }
 
-/** Shape del alumno raw devuelto por cargarAlumnosIniciales().
- *  Supabase infiere el campo de FK como array; se normaliza con primeroDeArray(). */
+/** Supabase infiere alumnos como array aunque sea 1:1 — normalizar con primeroDeArray() */
 interface SesionAlumnoRaw {
   id: string;
   alumno_id: string;
@@ -58,7 +35,7 @@ interface SesionAlumnoRaw {
   alumnos: { nombre_completo: string } | { nombre_completo: string }[] | null;
 }
 
-/** Info básica de la sesión activa para el monitor */
+/** Info básica de la sesión activa para el monitor del docente */
 export interface SesionActiva {
   id: string;
   codigo_acceso: string;
@@ -70,58 +47,26 @@ export interface SesionActiva {
   total_alumnos: number;  // total de alumnos del grupo (para el contador del navbar)
 }
 
-/** Sesión reciente para historial */
-export interface SesionResumen {
-  id: string;
-  codigo_acceso: string;
-  estado: string;
-  iniciada_en: string | null;
-  finalizada_en: string | null;
-  examen_titulo: string;
-}
+// Re-export para compatibilidad con imports existentes
+export type { SesionResumen } from '../../../shared/models/index';
 
 @Injectable()
 export class SesionesService {
-  // ── Dependencias ────────────────────────────────────────────────
   private readonly supabase = inject(SupabaseService);
   private readonly auth     = inject(AuthService);
 
-  // ── Estado con signals ───────────────────────────────────────────
-
-  /** Datos de la sesión que está activa en el monitor */
-  readonly sesionActiva = signal<SesionActiva | null>(null);
-
-  /**
-   * Lista reactiva de alumnos en la sesión.
-   * Se actualiza en tiempo real via Supabase Realtime.
-   */
+  readonly sesionActiva    = signal<SesionActiva | null>(null);
   readonly alumnosEnSesion = signal<SesionAlumnoConDatos[]>([]);
 
   readonly cargando = signal(false);
   readonly error    = signal<string | null>(null);
 
-  /** Referencia al canal de Realtime para poder desuscribirse */
-  private realtimeChannel: ReturnType<
-    typeof this.supabase.client.channel
-  > | null = null;
-
-  /** Intervalo de polling fallback cuando Realtime no está disponible */
+  private realtimeChannel: ReturnType<typeof this.supabase.client.channel> | null = null;
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-  /** true cuando Realtime confirmó SUBSCRIBED — el polling se degrada */
+  /** true cuando Realtime confirmó SUBSCRIBED — polling se detiene */
   private realtimeActivo = false;
 
-  // ── Métodos públicos ────────────────────────────────────────────
 
-  /**
-   * Crea una nueva sesión en Supabase para el examen/grupo dados.
-   * Genera un código de acceso único de 6 caracteres.
-   * Bug 7: ahora se crea con estado 'esperando', no 'activa'.
-   *
-   * @param examenId UUID del examen a iniciar
-   * @param grupoId  UUID del grupo que presentará el examen
-   * @returns UUID de la sesión creada, o null si falló
-   */
   async crearSesion(examenId: string, grupoId: string): Promise<string | null> {
     this.cargando.set(true);
     this.error.set(null);
@@ -135,15 +80,13 @@ export class SesionesService {
 
     const codigoAcceso = await this.generarCodigoUnico();
 
-    // Bug 7: crear con estado 'esperando' — el profesor decide cuándo iniciar
     const { data, error } = await this.supabase.client
       .from('sesiones')
       .insert({
         examen_id:     examenId,
         maestro_id:    maestroId,
         codigo_acceso: codigoAcceso,
-        estado:        'esperando',
-        // iniciada_en se fija cuando el profesor hace clic en "Iniciar Examen"
+        estado:        'esperando', // iniciada_en se fija al hacer clic en "Iniciar Examen"
       })
       .select('id')
       .single();
@@ -159,13 +102,7 @@ export class SesionesService {
     return data.id;
   }
 
-  /**
-   * Cambia el estado de la sesión a 'activa' y fija la hora de inicio.
-   * Llamar cuando el profesor hace clic en "Iniciar Examen" en el monitor.
-   *
-   * @param sesionId UUID de la sesión
-   * @returns true si el cambio fue exitoso
-   */
+
   async iniciarExamenActivo(sesionId: string): Promise<boolean> {
     const iniciada_en = new Date().toISOString();
 
@@ -182,17 +119,11 @@ export class SesionesService {
       return false;
     }
 
-    // Bug 6: actualizar iniciada_en en el signal local también
     this.sesionActiva.update((s) => (s ? { ...s, estado: 'activa', iniciada_en } : null));
     return true;
   }
 
-  /**
-   * Carga los datos completos de una sesión existente.
-   * Bug 10: también carga el total de alumnos del grupo.
-   *
-   * @param sesionId UUID de la sesión a cargar
-   */
+
   async cargarSesion(sesionId: string): Promise<boolean> {
     this.cargando.set(true);
     this.error.set(null);
@@ -224,7 +155,6 @@ export class SesionesService {
     const examen = row.examenes;
     const grupoId = examen?.grupo_id ?? '';
 
-    // Bug 10: contar alumnos del grupo para el contador del navbar
     let totalAlumnos = 0;
     if (grupoId) {
       const { count } = await this.supabase.client
@@ -250,30 +180,18 @@ export class SesionesService {
   }
 
   /**
-   * Carga la lista inicial de alumnos del grupo de la sesión
-   * y luego activa la suscripción de Realtime + polling fallback
-   * para actualizaciones en vivo aunque Realtime no esté habilitado en el proyecto.
-   *
-   * Si ya hay un canal Realtime activo y confirmado (realtimeActivo = true),
-   * solo refresca los datos sin re-suscribirse ni reiniciar el polling.
-   *
-   * @param sesionId UUID de la sesión activa
+   * Carga alumnos y activa Realtime + polling fallback.
+   * Si Realtime ya está confirmado, solo refresca datos sin re-suscribirse.
    */
   async iniciarMonitoreo(sesionId: string): Promise<void> {
     await this.cargarAlumnosIniciales(sesionId);
-    // Evitar re-suscripción si Realtime ya está confirmado
     if (!this.realtimeActivo) {
       this.suscribirseARealtime(sesionId);
       this._iniciarPolling(sesionId);
     }
   }
 
-  /**
-   * Finaliza la sesión: cambia estado a 'finalizada' en Supabase
-   * y cancela la suscripción de Realtime.
-   *
-   * @param sesionId UUID de la sesión a finalizar
-   */
+
   async finalizarSesion(sesionId: string): Promise<boolean> {
     this.cargando.set(true);
 
@@ -297,10 +215,7 @@ export class SesionesService {
     return true;
   }
 
-  /**
-   * Cancela la suscripción de Realtime y limpia el estado.
-   * Llamar en ngOnDestroy del MonitorComponent.
-   */
+  /** Llamar en MonitorComponent.ngOnDestroy(). */
   destruir(): void {
     this.desuscribirseDeRealtime();
     this._detenerPolling();
@@ -308,8 +223,6 @@ export class SesionesService {
     this.alumnosEnSesion.set([]);
     this.error.set(null);
   }
-
-  // ── Métodos privados ────────────────────────────────────────────
 
   private async cargarAlumnosIniciales(sesionId: string): Promise<void> {
     const { data, error } = await this.supabase.client
@@ -362,10 +275,9 @@ export class SesionesService {
         if (status === 'SUBSCRIBED') {
           console.log(`[SesionesService] Realtime activo para sesión: ${sesionId}`);
           this.realtimeActivo = true;
-          // Realtime confirmado → el polling ya no es necesario
           this._detenerPolling();
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          // Realtime falló o se cerró → reactivar polling como fallback
+          // Realtime no disponible → polling de respaldo
           this.realtimeActivo = false;
           this._iniciarPolling(sesionId);
           console.warn(`[SesionesService] Realtime ${status} — polling de respaldo activado.`);
@@ -381,10 +293,7 @@ export class SesionesService {
     this.realtimeActivo = false;
   }
 
-  /**
-   * Inicia un polling cada 4 segundos como fallback al Realtime.
-   * Garantiza actualizaciones aunque Realtime no esté habilitado en el proyecto.
-   */
+  /** Polling de respaldo cada 4 s para cuando Realtime no está disponible. */
   private _iniciarPolling(sesionId: string): void {
     this._detenerPolling();
     this.pollingInterval = setInterval(async () => {

@@ -1,20 +1,7 @@
-// =============================================================
-// shared/components/badge/badge.component.ts
-// Indicador visual de estado para alumnos en el panel de monitoreo.
-//
-// Estados disponibles:
-//   'activo'    → Verde  - Alumno respondiendo activamente
-//   'offline'   → Gris   - No conectado / sin pantalla compartida
-//   'enviado'   → Verde oscuro - Examen enviado (terminó)
-//
-// TODO: 'idle' y 'flagged' se agregarán cuando se implementen
-//       detección de inactividad y análisis de comportamiento.
-//
-// Uso:
-//   <app-badge estado="activo" />
-//   <app-badge estado="offline" />
-//   <app-badge estado="enviado" />
-// =============================================================
+/**
+ * Badge de estado para el monitor. Estados: activo | offline | enviado.
+ * TODO: 'idle' y 'flagged' cuando se implementen detección de inactividad/comportamiento.
+ */
 
 import {
   Component,
@@ -37,7 +24,6 @@ export type EstadoBadge = 'activo' | 'offline' | 'enviado';
       [class]="clases()"
       [attr.aria-label]="'Estado: ' + etiquetaMostrar()"
     >
-      <!-- Punto indicador -->
       <span
         class="w-1.5 h-1.5 rounded-full"
         [class]="puntoCl()"
@@ -49,20 +35,9 @@ export type EstadoBadge = 'activo' | 'offline' | 'enviado';
   `,
 })
 export class BadgeComponent {
-  // ── Inputs ─────────────────────────────────────────────
-
-  /** Estado que determina el color y texto del badge */
-  estado = input.required<EstadoBadge>();
-
-  /**
-   * Etiqueta personalizada. Si no se provee, se usa el texto
-   * predeterminado según el estado.
-   */
+  estado   = input.required<EstadoBadge>();
   etiqueta = input<string>('');
 
-  // ── Computed ───────────────────────────────────────────
-
-  /** Texto mostrado: etiqueta personalizada o texto por defecto */
   etiquetaMostrar = computed(() => {
     if (this.etiqueta()) return this.etiqueta();
     const textos: Record<EstadoBadge, string> = {
@@ -73,7 +48,6 @@ export class BadgeComponent {
     return textos[this.estado()];
   });
 
-  /** Clases del contenedor del badge según el estado */
   clases = computed(() => {
     const estilos: Record<EstadoBadge, string> = {
       activo:  'bg-emerald-50 text-emerald-700',
@@ -83,7 +57,6 @@ export class BadgeComponent {
     return estilos[this.estado()];
   });
 
-  /** Clases del punto indicador según el estado */
   puntoCl = computed(() => {
     const puntos: Record<EstadoBadge, string> = {
       activo:  'bg-emerald-500',

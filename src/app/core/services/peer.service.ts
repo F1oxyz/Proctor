@@ -15,34 +15,26 @@ export interface StreamAlumno {
 @Injectable({ providedIn: 'root' })
 export class PeerService {
 
-  // ── Instancia PeerJS ─────────────────────────────────────────────
   private peer: PeerInstance | null = null;
 
-  // ── Signals públicos ─────────────────────────────────────────────
-
-  /** Mapa alumnoId → stream (actualizado por Realtime de PeerJS) */
+  /** alumnoId → stream recibido (lado docente) */
   readonly streamsPorAlumno = signal<Map<string, StreamAlumno>>(new Map());
   readonly miPeerId         = signal<string | null>(null);
   readonly inicializando    = signal(false);
   readonly listo            = signal(false);
   readonly error            = signal<string | null>(null);
 
-  // ── Estado privado ───────────────────────────────────────────────
-
-  /** Stream del alumno, guardado para detenerlo al finalizar el examen */
   private _streamAlumno: MediaStream | null = null;
 
-  /** Reintentos cuando el ID del receptor (docente) ya está ocupado */
+  // Reintentos cuando el ID del receptor (docente) ya está ocupado en PeerJS server
   private _retryCount   = 0;
   private _retryTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly _MAX_RETRIES = 4;
 
-  /** Reintentos cuando el peer del docente aún no está disponible */
+  // Reintentos cuando el peer del docente aún no está disponible
   private _reconexionTimer:   ReturnType<typeof setTimeout> | null = null;
   private _reconexionIntento  = 0;
   private readonly _MAX_RECONEXION = 5;
-
-  // ── MODO DOCENTE: receptor ───────────────────────────────────────
 
   async inicializarComoReceptor(sesionId: string): Promise<void> {
     if (this._retryCount === 0) this.destruir();
@@ -63,7 +55,6 @@ export class PeerService {
         this.miPeerId.set(id);
         this.inicializando.set(false);
         this.listo.set(true);
-        // Limpiar error previo si la reconexión fue exitosa
         this.error.set(null);
         this._retryCount = 0;
         console.log(`[PeerService] Receptor listo: ${id}`);
@@ -97,8 +88,7 @@ export class PeerService {
 
       this.peer.on('disconnected', () => {
         console.warn('[PeerService] Desconectado del servidor de señalización. Reconectando...');
-        // Marcar como no listo mientras reconecta — estado honesto
-        this.listo.set(false);
+        this.listo.set(false); // estado honesto mientras reconecta
         this.peer?.reconnect();
       });
 
@@ -134,19 +124,11 @@ export class PeerService {
     llamada.on('error', (err) => console.error('[PeerService] Error en llamada:', err));
   }
 
-  // ── Utilidades de sincronización ─────────────────────────────────
-
   /**
-   * Espera hasta que PeerJS esté listo (peer.on('open') disparó) o hasta
-   * que se agote el timeout (por defecto 8 s).
-   *
-   * Retorna el peerId asignado, o null si el timeout se agotó antes de
-   * que el peer quedara listo.
-   *
-   * Uso típico: llamar ANTES de leer `miPeerId()` en el flujo de unión.
+   * Espera hasta que PeerJS dispare 'open' o se agote el timeout (8 s por defecto).
+   * Llamar ANTES de leer `miPeerId()` en el flujo de unión a sala.
    */
   esperarPeerId(timeoutMs = 8000): Promise<string | null> {
-    // Si ya está listo, retornar inmediatamente
     const idActual = this.miPeerId();
     if (idActual) return Promise.resolve(idActual);
 
@@ -170,8 +152,6 @@ export class PeerService {
       comprobar();
     });
   }
-
-  // ── MODO ALUMNO: emisor ──────────────────────────────────────────
 
   async conectarAlDocente(
     stream:    MediaStream,
@@ -245,28 +225,21 @@ export class PeerService {
       return;
     }
 
-    // Registrar 'ended' en TODOS los video tracks (no solo el primero)
-    // { once: true } evita acumular listeners en cada reintento
+    // { once: true } evita acumular listeners en cada reintento de conexión
     stream.getVideoTracks().forEach((track) => {
       track.addEventListener('ended', () => llamada.close(), { once: true });
     });
     console.log(`[PeerService] Llamando a ${peerIdDocente} (intento ${this._reconexionIntento + 1})`);
   }
 
-  // ── Validación de soporte ────────────────────────────────────────
-
-  /**
-   * Verifica que el navegador soporte WebRTC antes de intentar usar PeerJS.
-   * Retorna true si está soportado; false si no (y setea el signal `error`).
-   */
+  /** Retorna false y setea `error` si el navegador no soporta RTCPeerConnection. */
   private _validarWebRTC(): boolean {
     if (typeof window === 'undefined') return false;
 
     if (!window.RTCPeerConnection) {
-      const mensaje =
-        'Tu navegador no soporta WebRTC. ' +
-        'Usá Chrome, Edge o Firefox para la transmisión de pantalla.';
-      this.error.set(mensaje);
+      this.error.set(
+        'Tu navegador no soporta WebRTC. Usá Chrome, Edge o Firefox para la transmisión de pantalla.'
+      );
       this.inicializando.set(false);
       console.error('[PeerService] RTCPeerConnection no disponible en este navegador.');
       return false;
@@ -275,9 +248,7 @@ export class PeerService {
     return true;
   }
 
-  // ── Limpieza ─────────────────────────────────────────────────────
-
-  /** Detiene stream del alumno y cierra su peer. Llamar en ExamenComponent.ngOnDestroy(). */
+  /** Detiene stream y cierra peer del alumno. Llamar en ExamenComponent.ngOnDestroy(). */
   detenerStreamAlumno(): void {
     if (this._reconexionTimer) {
       clearTimeout(this._reconexionTimer);

@@ -1,67 +1,32 @@
-// =============================================================
-// features/docente/services/grupos.service.ts
-//
-// Servicio exclusivo del módulo docente para gestionar grupos
-// y sus alumnos. Interactúa directamente con Supabase usando
-// el cliente singleton de SupabaseService.
-//
-// Responsabilidades:
-//   - Listar grupos del maestro autenticado (con conteo de alumnos)
-//   - Crear un grupo nuevo y registrar su lista de alumnos
-//   - Listar alumnos de un grupo específico
-//   - Eliminar un grupo (CASCADE borra sus alumnos en BD)
-//
-// RLS activo en Supabase:
-//   - grupos: solo el maestro dueño (maestro_id = auth.uid())
-//   - alumnos: solo el maestro dueño del grupo padre
-//   - alumnos_anon_select: los alumnos pueden leer la lista (para sala espera)
-//
-// IMPORTANTE: Este servicio NUNCA debe inyectarse en features/estudiante.
-//             Cada feature tiene sus propios servicios (ver arquitectura).
-// =============================================================
+/**
+ * Servicio de gestión de grupos y alumnos (solo docente).
+ *
+ * RLS: grupos filtra por maestro_id = auth.uid().
+ *      alumnos hereda del grupo padre.
+ *      Política alumnos_anon_select permite que el alumno lea la lista en sala de espera.
+ *
+ * IMPORTANTE: No inyectar en features/estudiante.
+ */
 
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { SupabaseService } from '../../../core/services/supabase.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { Grupo, GrupoConStats, Alumno } from '../../../shared/models';
-
-/** Resultado estándar de operaciones del servicio */
-interface ServiceResult<T = void> {
-  data: T | null;
-  error: string | null;
-}
+import { Grupo, GrupoConStats, Alumno, ServiceResult } from '../../../shared/models';
 
 @Injectable()
 export class GruposService {
   private readonly supabase = inject(SupabaseService).client;
   private readonly auth = inject(AuthService);
 
-  // ── Estado reactivo ────────────────────────────────────
-
-  /** Lista de grupos del docente con conteo de alumnos */
-  readonly grupos = signal<GrupoConStats[]>([]);
-
-  /** Alumnos del grupo actualmente seleccionado */
+  readonly grupos             = signal<GrupoConStats[]>([]);
   readonly alumnosGrupoActivo = signal<Alumno[]>([]);
-
-  /** Indica si hay una operación en progreso */
-  readonly cargando = signal(false);
-
-  /** Error global del servicio (null si no hay error) */
-  readonly error = signal<string | null>(null);
-
-  /** Total de alumnos sumando todos los grupos */
-  readonly totalAlumnos = computed(() =>
+  readonly cargando           = signal(false);
+  readonly error              = signal<string | null>(null);
+  readonly totalAlumnos       = computed(() =>
     this.grupos().reduce((acc, g) => acc + g.total_alumnos, 0)
   );
 
-  // ── Métodos públicos ───────────────────────────────────
 
-  /**
-   * Carga todos los grupos del maestro autenticado.
-   * Hace un JOIN para obtener el conteo de alumnos por grupo.
-   * Popula el signal `grupos`.
-   */
   async cargarGrupos(): Promise<void> {
     this.cargando.set(true);
     this.error.set(null);
@@ -81,7 +46,6 @@ export class GruposService {
 
       if (error) throw error;
 
-      // Mapear el resultado de Supabase al tipo GrupoConStats
       // Supabase devuelve alumnos(count) como [{ count: N }]
       const gruposConStats: GrupoConStats[] = (data ?? []).map((g: any) => ({
         id: g.id,
@@ -101,19 +65,7 @@ export class GruposService {
     }
   }
 
-  /**
-   * Crea un nuevo grupo y registra todos sus alumnos en una sola operación.
-   *
-   * Flujo:
-   *   1. Insertar registro en tabla `grupos`
-   *   2. Parsear el texto de alumnos (un nombre por línea)
-   *   3. Insertar todos los alumnos en tabla `alumnos` con bulk insert
-   *   4. Recargar la lista de grupos
-   *
-   * @param nombre - Nombre del grupo o materia. Ej: "Dibujo Industrial - 2do Cuatri"
-   * @param listaAlumnos - Texto con nombres separados por salto de línea
-   * @returns ServiceResult con el grupo creado o un mensaje de error
-   */
+
   async crearGrupo(
     nombre: string,
     listaAlumnos: string
@@ -125,7 +77,6 @@ export class GruposService {
       const maestroId = this.auth.currentUser()?.id;
       if (!maestroId) throw new Error('No hay sesión activa.');
 
-      // ── 1. Crear el grupo ────────────────────────────
       const { data: grupo, error: errorGrupo } = await this.supabase
         .from('grupos')
         .insert({ nombre: nombre.trim(), maestro_id: maestroId })
@@ -134,14 +85,11 @@ export class GruposService {
 
       if (errorGrupo) throw errorGrupo;
 
-      // ── 2. Parsear nombres de alumnos ────────────────
-      // Separar por salto de línea, limpiar espacios, descartar vacíos
       const nombres = listaAlumnos
         .split('\n')
         .map((n) => n.trim())
         .filter((n) => n.length > 0);
 
-      // ── 3. Insertar alumnos en bulk (si hay nombres) ─
       if (nombres.length > 0) {
         const alumnosPayload = nombres.map((nombre_completo) => ({
           grupo_id: grupo.id,
@@ -155,7 +103,6 @@ export class GruposService {
         if (errorAlumnos) throw errorAlumnos;
       }
 
-      // ── 4. Recargar lista ────────────────────────────
       await this.cargarGrupos();
 
       return { data: grupo, error: null };
@@ -169,12 +116,7 @@ export class GruposService {
     }
   }
 
-  /**
-   * Carga los alumnos de un grupo específico.
-   * Popula el signal `alumnosGrupoActivo`.
-   *
-   * @param grupoId - UUID del grupo a consultar
-   */
+
   async cargarAlumnos(grupoId: string): Promise<void> {
     this.cargando.set(true);
 
@@ -196,12 +138,7 @@ export class GruposService {
     }
   }
 
-  /**
-   * Actualiza el nombre de un alumno en la BD y en el signal local.
-   *
-   * @param alumnoId  - UUID del alumno a editar
-   * @param nuevoNombre - Nuevo nombre completo
-   */
+
   async editarAlumno(alumnoId: string, nuevoNombre: string): Promise<ServiceResult> {
     try {
       const { error } = await this.supabase
@@ -211,7 +148,6 @@ export class GruposService {
 
       if (error) throw error;
 
-      // Actualizar signal local sin recargar de BD
       this.alumnosGrupoActivo.update((lista) =>
         lista.map((a) =>
           a.id === alumnoId ? { ...a, nombre_completo: nuevoNombre.trim() } : a
@@ -226,15 +162,9 @@ export class GruposService {
     }
   }
 
-  /**
-   * Elimina un alumno de la BD y del signal local.
-   * La BD eliminará en cascada sus sesion_alumnos y respuestas.
-   *
-   * @param alumnoId - UUID del alumno a eliminar
-   */
+  /** CASCADE en BD elimina sesion_alumnos y respuestas del alumno. */
   async eliminarAlumno(alumnoId: string): Promise<ServiceResult> {
     try {
-      // Obtener grupo_id antes de eliminar para actualizar el conteo
       const alumno = this.alumnosGrupoActivo().find((a) => a.id === alumnoId);
 
       const { error } = await this.supabase
@@ -244,12 +174,10 @@ export class GruposService {
 
       if (error) throw error;
 
-      // Actualizar signal de alumnos localmente
       this.alumnosGrupoActivo.update((lista) =>
         lista.filter((a) => a.id !== alumnoId)
       );
 
-      // Actualizar conteo en el grupo correspondiente
       if (alumno?.grupo_id) {
         this.grupos.update((lista) =>
           lista.map((g) =>
@@ -268,13 +196,7 @@ export class GruposService {
     }
   }
 
-  /**
-   * Elimina un grupo por ID.
-   * La BD elimina en cascada todos sus alumnos (ON DELETE CASCADE).
-   * Recarga la lista de grupos tras eliminar.
-   *
-   * @param grupoId - UUID del grupo a eliminar
-   */
+  /** CASCADE en BD elimina todos sus alumnos. */
   async eliminarGrupo(grupoId: string): Promise<ServiceResult> {
     this.cargando.set(true);
 
@@ -286,7 +208,6 @@ export class GruposService {
 
       if (error) throw error;
 
-      // Actualizar el signal localmente (más rápido que recargar de BD)
       this.grupos.update((lista) => lista.filter((g) => g.id !== grupoId));
 
       return { data: null, error: null };

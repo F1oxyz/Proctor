@@ -46,18 +46,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { FilaResultadoComponent } from './components/fila-resultado/fila-resultado.component';
 import { SesionAlumnoConDatos } from '../../../../shared/models/index';
-
-// ── Tipos internos para resultados de queries ─────────────────
-
-/**
- * Helper seguro: Supabase infiere JOINs de FK como arrays aunque sean 1:1.
- * Retorna el primer elemento si es array, o el valor tal cual si ya es objeto.
- */
-function primeroDeArray<T>(val: T | T[] | null | undefined): T | null {
-  if (val == null) return null;
-  if (Array.isArray(val)) return val[0] ?? null;
-  return val;
-}
+import { primeroDeArray } from '../../../../shared/utils/supabase.utils';
 
 /** Shape del JOIN sesiones → examenes → grupos en cargarResultados() */
 interface SesionResultadosRow {

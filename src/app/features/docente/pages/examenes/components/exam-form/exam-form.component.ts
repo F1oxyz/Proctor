@@ -1,21 +1,4 @@
-// =============================================================
-// features/docente/pages/examenes/components/exam-form/
-// exam-form.component.ts
-//
-// Formulario de creación y edición de exámenes.
-// Ruta: /docente/examenes/nuevo  → crear
-//       /docente/examenes/:id    → editar
-//
-// El parámetro :id viene via withComponentInputBinding() en app.config.
-// Si id está presente, carga el examen existente para editar.
-//
-// Funcionalidades:
-//   - Campos: Título, Tiempo Límite (minutos), Grupo, Descripción (opcional)
-//   - Lista dinámica de PreguntaCardComponent (añadir / eliminar)
-//   - Validación global antes de guardar
-//   - Botón "Guardar" llama a ExamenesService.crearExamen o actualizarExamen
-//   - Botón "Cancelar" regresa a /docente/examenes
-// =============================================================
+// :id viene via withComponentInputBinding() en app.config.ts
 
 import {
   Component,
@@ -54,7 +37,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
 
       <main class="flex-1 max-w-3xl mx-auto w-full px-6 py-8">
 
-        <!-- Breadcrumb -->
+
         <nav class="flex items-center gap-2 text-xs text-slate-400 mb-5" aria-label="Breadcrumb">
           <a routerLink="/docente/examenes" class="hover:text-slate-600 transition-colors cursor-pointer">
             Exámenes
@@ -63,7 +46,6 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
           <span class="text-slate-600">{{ esEdicion() ? 'Editar Examen' : 'Crear Nuevo Examen' }}</span>
         </nav>
 
-        <!-- Título -->
         <div class="mb-6">
           <h1 class="text-xl font-semibold text-slate-800">
             {{ esEdicion() ? 'Editar Examen' : 'Crear Nuevo Examen' }}
@@ -88,9 +70,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                 <h2 class="text-sm font-semibold text-slate-700">Detalles del Examen</h2>
               </div>
 
-              <!-- Título + Tiempo + Mínimo aprobatorio en grid -->
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Título del examen -->
                 <div class="md:col-span-3 flex flex-col gap-1.5">
                   <label for="titulo" class="text-xs font-medium text-slate-600">Título del Examen</label>
                   <input
@@ -109,7 +89,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                   }
                 </div>
 
-                <!-- Tiempo límite -->
+
                 <div class="flex flex-col gap-1.5">
                   <label for="duracion" class="text-xs font-medium text-slate-600">
                     Límite de Tiempo (minutos)
@@ -138,7 +118,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                   }
                 </div>
 
-                <!-- Mínimo aprobatorio -->
+
                 <div class="flex flex-col gap-1.5">
                   <label for="minimo" class="text-xs font-medium text-slate-600">
                     Mínimo Aprobatorio (%)
@@ -167,11 +147,10 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                   }
                 </div>
 
-                <!-- Placeholder de tercera columna para alinear el grid -->
-                <div></div>
+                <div></div><!-- spacer -->
               </div>
 
-              <!-- Selector de grupo -->
+
               <div class="flex flex-col gap-1.5">
                 <label for="grupo" class="text-xs font-medium text-slate-600">Seleccionar Grupo</label>
                 <select
@@ -196,7 +175,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                 }
               </div>
 
-              <!-- Descripción opcional -->
+
               <div class="flex flex-col gap-1.5">
                 <label for="descripcion" class="text-xs font-medium text-slate-600">
                   Descripción <span class="text-slate-400">(Opcional)</span>
@@ -225,8 +204,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                 </h2>
               </div>
 
-              <!-- Cards de preguntas -->
-              @for (pregunta of preguntas(); track $index; let i = $index) {
+            @for (pregunta of preguntas(); track $index; let i = $index) {
                 <app-pregunta-card
                   [numero]="i + 1"
                   [preguntaInicial]="pregunta"
@@ -235,8 +213,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
                 />
               }
 
-              <!-- Botón agregar pregunta -->
-              <button
+            <button
                 type="button"
                 (click)="agregarPregunta()"
                 class="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl
@@ -251,7 +228,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
               </button>
             </div>
 
-            <!-- Error de preguntas (sin preguntas o preguntas incompletas) -->
+
             @if (errorPreguntas()) {
               <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600 flex items-start gap-2">
                 <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -261,7 +238,7 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
               </div>
             }
 
-            <!-- Error del servicio (incluye bloqueo por historial) -->
+
             @if (examenesService.error()) {
               <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 flex items-start gap-3">
                 <svg class="w-5 h-5 shrink-0 mt-0.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -313,69 +290,46 @@ import { LoadingSpinnerComponent } from '../../../../../../shared/components/loa
 export class ExamFormComponent implements OnInit {
   private readonly router = inject(Router);
   readonly examenesService = inject(ExamenesService);
-  readonly gruposService = inject(GruposService);
-  private readonly fb = inject(FormBuilder);
+  readonly gruposService   = inject(GruposService);
+  private readonly fb      = inject(FormBuilder);
 
-  // ── Input de ruta (:id via withComponentInputBinding) ──
-
-  /** UUID del examen a editar. Undefined si es creación nueva */
   id = input<string>();
 
-  // ── Estado ─────────────────────────────────────────────
-
-  /** True si hay un :id en la ruta (modo edición) */
-  esEdicion = signal(false);
-
-  /** Array de payloads de preguntas del formulario */
-  preguntas = signal<PreguntaPayload[]>([]);
-
-  /** Referencia a todas las tarjetas de pregunta para poder marcarlas como tocadas */
-  readonly preguntaCards = viewChildren(PreguntaCardComponent);
-
-  /** Mensaje de error de la sección de preguntas (null = sin error) */
+  esEdicion     = signal(false);
+  preguntas     = signal<PreguntaPayload[]>([]);
   errorPreguntas = signal<string | null>(null);
 
-  /**
-   * true cuando el servicio retornó el error de bloqueo por historial.
-   * En ese caso, el formulario se deshabilita para evitar intentos repetidos.
-   */
+  readonly preguntaCards = viewChildren(PreguntaCardComponent);
+
+  /** true si el servicio retornó el error de bloqueo por historial activo/finalizado. */
   readonly bloqueadoPorHistorial = computed(() =>
     (this.examenesService.error() ?? '').includes('sesiones iniciadas o finalizadas')
   );
 
-  // ── Formulario de metadata del examen ─────────────────
-
   form = this.fb.group({
-    titulo: ['', [Validators.required, Validators.minLength(3)]],
-    duracion_min: [60, [Validators.required, Validators.min(1)]],
+    titulo:             ['', [Validators.required, Validators.minLength(3)]],
+    duracion_min:       [60, [Validators.required, Validators.min(1)]],
     minimo_aprobatorio: [60, [Validators.required, Validators.min(0), Validators.max(100)]],
-    grupo_id: ['', Validators.required],
-    descripcion: [''],
+    grupo_id:           ['', Validators.required],
+    descripcion:        [''],
   });
 
-  // ── Lifecycle ──────────────────────────────────────────
-
   async ngOnInit() {
-    // Cargar grupos para el selector
     await this.gruposService.cargarGrupos();
 
     const examenId = this.id();
     if (examenId) {
-      // Modo edición: cargar datos existentes
       this.esEdicion.set(true);
       await this.examenesService.cargarExamenCompleto(examenId);
 
       const examen = this.examenesService.examenActivo();
       if (examen) {
-        // Poblar el formulario de metadata
         this.form.patchValue({
           titulo: examen.titulo,
           duracion_min: examen.duracion_min,
           minimo_aprobatorio: examen.minimo_aprobatorio ?? 60,
           grupo_id: examen.grupo_id,
         });
-
-        // Poblar las preguntas
         this.preguntas.set(
           examen.preguntas.map((p) => ({
             texto: p.texto,
@@ -390,16 +344,11 @@ export class ExamFormComponent implements OnInit {
         );
       }
     } else {
-      // Modo creación: iniciar con una pregunta vacía
       this.agregarPregunta();
     }
   }
 
-  // ── Métodos ────────────────────────────────────────────
 
-  /** Agrega una nueva pregunta vacía al array.
-   *  Inicia con 2 opciones (el mínimo); el usuario puede añadir hasta 4.
-   */
   agregarPregunta() {
     this.preguntas.update((lista) => [
       ...lista,
@@ -415,37 +364,27 @@ export class ExamFormComponent implements OnInit {
     this.errorPreguntas.set(null);
   }
 
-  /** Elimina la pregunta del índice dado */
   eliminarPregunta(idx: number) {
     this.preguntas.update((lista) => lista.filter((_, i) => i !== idx));
   }
 
-  /**
-   * Actualiza la pregunta en el índice dado con el nuevo payload.
-   * Llamado desde el output (cambio) de PreguntaCardComponent.
-   */
   onCambioPregunta(idx: number, payload: PreguntaPayload) {
     this.preguntas.update((lista) =>
       lista.map((p, i) => (i === idx ? payload : p))
     );
   }
 
-  /** Valida y guarda el examen (crear o actualizar) */
   async guardar() {
-    // Marcar todos los campos como tocados para activar errores inline
     this.form.markAllAsTouched();
     this.preguntaCards().forEach((card) => card.marcarTocado());
 
-    // Validar metadata
     if (this.form.invalid) return;
 
-    // Validar que haya al menos una pregunta
     if (this.preguntas().length === 0) {
       this.errorPreguntas.set('Agrega al menos una pregunta antes de guardar.');
       return;
     }
 
-    // Validar cada pregunta individualmente
     const hayPreguntaInvalida = this.preguntas().some((p) => {
       if (!p.texto.trim()) return true;
       if (p.tipo === 'opcion_multiple') {
@@ -491,12 +430,10 @@ export class ExamFormComponent implements OnInit {
     }
   }
 
-  /** Navega de regreso a la lista de exámenes */
   cancelar() {
     this.router.navigate(['/docente/examenes']);
   }
 
-  /** Determina si un campo de metadata debe mostrar error */
   campoInvalido(campo: string): boolean {
     const ctrl = this.form.get(campo);
     return !!ctrl && ctrl.invalid && (ctrl.dirty || ctrl.touched);

@@ -12,3 +12,4 @@ export * from './examen.model';
 export * from './pregunta.model';
 export * from './sesion.model';
 export * from './respuesta.model';
+export * from './service-result.model';

@@ -1,29 +1,5 @@
-/**
- * examen.component.ts
- * ─────────────────────────────────────────────────────────────────
- * Shell principal de la vista del examen para el alumno.
- * Ruta: /examen/:codigo/evaluacion (protegida por sessionGuard)
- *
- * RESPONSABILIDADES:
- *  - Arrancar el intervalo del temporizador (setInterval)
- *  - Mostrar la pregunta actual (delegando a los sub-componentes)
- *  - Gestionar navegación: Anterior / Siguiente
- *  - Detectar fin de tiempo o envío manual → llamar enviarExamen()
- *  - Navegar a /examen/:codigo/resultado con los datos del resultado
- *
- * DISEÑO (según PDF - página 8):
- *  - Header: nombre del alumno + temporizador (esquina superior derecha)
- *  - Barra de progreso "QUESTION X OF N"
- *  - Card central con la pregunta
- *  - Footer: botones ← Previous y Siguiente →
- *
- * ARQUITECTURA:
- *  - Reutiliza ExamenActivoService del proveedor de SalaEsperaComponent
- *    (ambos están en la misma jerarquía de rutas /examen/:codigo/*)
- *  - Maneja el intervalo con cleanup en ngOnDestroy
- *  - OnPush
- * ─────────────────────────────────────────────────────────────────
- */
+// ExamenActivoService lo provee SalaEsperaComponent — ambos comparten la misma
+// jerarquía de rutas /examen/:codigo/*, no se debe declarar providers aquí.
 
 import {
   Component,
@@ -82,7 +58,6 @@ import { OpcionActiva } from '../../services/examen-activo.service';
             </div>
           </div>
 
-          <!-- Temporizador -->
           <app-temporizador
             [segundosRestantes]="segundosRestantes()"
             (tiempoAgotado)="onTiempoAgotado()"
@@ -91,7 +66,7 @@ import { OpcionActiva } from '../../services/examen-activo.service';
         </div>
       </header>
 
-      <!-- ── Banner de error al guardar respuesta (transitorio, amber) ── -->
+
       @if (servicio.errorGuardado()) {
         <div class="bg-amber-50 border-b border-amber-200 px-4 py-2">
           <div class="max-w-2xl mx-auto flex items-center gap-2 text-sm text-amber-800">
@@ -103,7 +78,7 @@ import { OpcionActiva } from '../../services/examen-activo.service';
         </div>
       }
 
-      <!-- ── Banner de error crítico (ej: fallo al enviar examen, rojo) ── -->
+
       @if (servicio.error()) {
         <div class="bg-red-50 border-b border-red-300 px-4 py-2">
           <div class="max-w-2xl mx-auto flex items-center gap-2 text-sm text-red-800">
@@ -115,21 +90,17 @@ import { OpcionActiva } from '../../services/examen-activo.service';
         </div>
       }
 
-      <!-- ── Cuerpo del examen ── -->
       <main class="flex-1 flex items-start justify-center px-4 py-8">
         <div class="w-full max-w-2xl space-y-6">
 
-          <!-- Barra de progreso -->
           <app-barra-progreso
             [preguntaActual]="servicio.numeroPreguntaVisible()"
             [totalPreguntas]="servicio.totalPreguntas()"
           />
 
-          <!-- Card de la pregunta -->
           <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
 
             @if (servicio.cargando()) {
-              <!-- Loading de preguntas -->
               <div class="flex items-center justify-center py-12">
                 <svg class="w-7 h-7 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -140,7 +111,6 @@ import { OpcionActiva } from '../../services/examen-activo.service';
 
             @else if (servicio.preguntaActual()) {
 
-              <!-- Pregunta de opción múltiple -->
               @if (servicio.preguntaActual()!.tipo === 'opcion_multiple') {
                 <app-pregunta-opcion-multiple
                   [pregunta]="servicio.preguntaActual()!"
@@ -149,7 +119,6 @@ import { OpcionActiva } from '../../services/examen-activo.service';
                 />
               }
 
-              <!-- Pregunta de texto abierto -->
               @else {
                 <app-pregunta-abierta
                   [pregunta]="servicio.preguntaActual()!"
@@ -162,10 +131,7 @@ import { OpcionActiva } from '../../services/examen-activo.service';
 
           </div>
 
-          <!-- ── Navegación: Anterior / Siguiente ── -->
           <div class="flex items-center justify-between">
-
-            <!-- Botón Anterior -->
             <button
               type="button"
               (click)="servicio.preguntaAnterior()"
@@ -178,7 +144,7 @@ import { OpcionActiva } from '../../services/examen-activo.service';
               Anterior
             </button>
 
-            <!-- Botón Enviar: en la última pregunta, O si hay error de envío pendiente (reintento) -->
+
             @if (esUltimaPregunta() || servicio.error()) {
               <button
                 type="button"
@@ -209,7 +175,6 @@ import { OpcionActiva } from '../../services/examen-activo.service';
                 }
               </button>
             } @else {
-              <!-- Botón Siguiente -->
               <button
                 type="button"
                 (click)="servicio.siguientePregunta()"
@@ -227,7 +192,7 @@ import { OpcionActiva } from '../../services/examen-activo.service';
         </div>
       </main>
 
-      <!-- ── Modal de confirmación de envío ── -->
+
       @if (mostrarConfirmacion()) {
         <div
           class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -276,55 +241,30 @@ import { OpcionActiva } from '../../services/examen-activo.service';
   `,
 })
 export class ExamenComponent implements OnInit, OnDestroy {
-  // ── Dependencias ────────────────────────────────────────────────
   readonly servicio = inject(ExamenActivoService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
+  private readonly route       = inject(ActivatedRoute);
+  private readonly router      = inject(Router);
   private readonly peerService = inject(PeerService);
 
-  // ── Estado del temporizador ───────────────────────────────────────
-
-  /** Segundos restantes (se decrementa cada segundo) */
-  readonly segundosRestantes = signal(0);
-
-  /** Referencia al intervalo para poder limpiarlo */
+  readonly segundosRestantes   = signal(0);
   private intervaloTimer: ReturnType<typeof setInterval> | null = null;
 
-  // ── Estado de UI ──────────────────────────────────────────────
-
-  /** true mientras se procesa el envío */
-  readonly enviando = signal(false);
-
-  /** Muestra el modal de confirmación de envío */
+  readonly enviando            = signal(false);
   readonly mostrarConfirmacion = signal(false);
 
-  // ── Computed ─────────────────────────────────────────────────────
-
-  /** Iniciales del alumno para el avatar */
   readonly iniciales = computed(() =>
     getIniciales(this.servicio.alumno()?.nombre_completo ?? '')
   );
 
-  /** true si está en la última pregunta */
   readonly esUltimaPregunta = computed(
-    () =>
-      this.servicio.indicePreguntaActual() ===
-      this.servicio.totalPreguntas() - 1
+    () => this.servicio.indicePreguntaActual() === this.servicio.totalPreguntas() - 1
   );
 
-  /** ID de la opción seleccionada para la pregunta actual */
-  readonly opcionIdActual = computed(() => {
-    const r = this.servicio.respuestaActual();
-    return r?.opcion_id ?? null;
-  });
+  readonly opcionIdActual = computed(() => this.servicio.respuestaActual()?.opcion_id ?? null);
 
-  /** Texto abierto guardado para la pregunta actual */
-  readonly textoAbiertoActual = computed(() => {
-    const r = this.servicio.respuestaActual();
-    return r?.respuesta_abierta ?? null;
-  });
-
-  // ── Ciclo de vida ─────────────────────────────────────────────
+  readonly textoAbiertoActual = computed(
+    () => this.servicio.respuestaActual()?.respuesta_abierta ?? null
+  );
 
   ngOnInit(): void {
     const sesion = this.servicio.sesion();
@@ -335,7 +275,6 @@ export class ExamenComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Calcula segundos restantes descontando el tiempo ya transcurrido
     this.segundosRestantes.set(
       calcularSegundosRestantes(sesion.duracion_min, sesion.iniciada_en),
     );
@@ -344,15 +283,10 @@ export class ExamenComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Limpiar el intervalo al salir de la página
     this.detenerTemporizador();
-    // Detener el stream de pantalla y cerrar la conexión PeerJS al finalizar el examen
     this.peerService.detenerStreamAlumno();
   }
 
-  // ── Temporizador ──────────────────────────────────────────────
-
-  /** Inicia el setInterval que decrementa el contador cada segundo */
   private iniciarTemporizador(): void {
     this.intervaloTimer = setInterval(() => {
       this.segundosRestantes.update((s) => {
@@ -374,71 +308,48 @@ export class ExamenComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ── Handlers ─────────────────────────────────────────────────────
-
   /**
-   * Se dispara cuando TemporizadorComponent emite tiempoAgotado.
-   * Detiene el timer e intenta enviar el examen automáticamente.
-   * Si el envío falla (sin conexión), el timer permanece detenido pero
-   * el alumno ve el error y puede reintentar manualmente.
+   * Timer agotado → envío automático.
+   * Si falla, el timer queda en 00:00 y el alumno puede reintentar.
    */
   onTiempoAgotado(): void {
     this.detenerTemporizador();
     void this.enviarExamen();
   }
 
-  /**
-   * El alumno seleccionó una opción de múltiple.
-   * Guarda la respuesta en ExamenActivoService (y en Supabase).
-   */
   async onOpcionElegida(opcion: OpcionActiva): Promise<void> {
     await this.servicio.guardarRespuesta(opcion.id, null);
   }
 
-  /**
-   * El alumno escribió en la pregunta abierta.
-   * Guarda el texto (con debounce ya aplicado en el componente hijo).
-   */
   async onTextoAbiertoCambiado(texto: string): Promise<void> {
     await this.servicio.guardarRespuesta(null, texto);
   }
 
-  /** Muestra el modal de confirmación antes de enviar */
   confirmarEnvio(): void {
     this.mostrarConfirmacion.set(true);
   }
 
   /**
-   * Envía el examen, calcula el resultado y navega a la pantalla
-   * de resultado del alumno.
-   * Si el servicio retorna null (error de red), NO navega y deja al alumno
-   * en la pantalla actual — el error queda visible en `servicio.error()`.
+   * Envía el examen y navega a resultados.
+   * Si el servicio retorna null (error de red), NO navega — el error
+   * queda visible en servicio.error() y el alumno puede reintentar.
    */
   async enviarExamen(): Promise<void> {
     if (this.enviando()) return;
 
     this.mostrarConfirmacion.set(false);
     this.enviando.set(true);
-    // Limpiar error previo antes del reintento
     this.servicio.error.set(null);
 
     const resultado = await this.servicio.enviarExamen(this.segundosRestantes());
 
     this.enviando.set(false);
 
-    if (!resultado) {
-      // El servicio ya seteó servicio.error() con un mensaje visible.
-      // NO restauramos el timer: si el tiempo se agotó, queda en 00:00.
-      // Si todavía hay tiempo, el alumno puede reintentar con "Enviar Examen".
-      return;
-    }
+    if (!resultado) return; // error seteado en servicio.error(), alumno puede reintentar
 
-    // Éxito: detener el timer y navegar a resultados
     this.detenerTemporizador();
 
-    // `:codigo` está en el PARENT route (/examen/:codigo), no en la ruta actual
-    // (/examen/:codigo/evaluacion). Usamos el código del servicio como fuente
-    // principal y el paramMap del padre como fallback.
+    // :codigo está en el PARENT route (/examen/:codigo/evaluacion)
     const codigo =
       this.servicio.sesion()?.codigo_acceso
       ?? this.route.parent?.snapshot.paramMap.get('codigo');

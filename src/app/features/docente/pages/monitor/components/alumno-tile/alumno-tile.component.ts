@@ -38,6 +38,7 @@ import {
 } from '@angular/core';
 import { SesionAlumnoConDatos } from '../../../../../../shared/models/index';
 import { colorAvatar, getIniciales } from '../../../../../../shared/utils/avatar.utils';
+import { playStream } from '../../../../../../shared/utils/video.utils';
 
 /** Estado visual del tile (distinto del estado DB). Solo estados realmente emitidos. */
 export type EstadoTile = 'activo' | 'offline' | 'enviado';
@@ -189,26 +190,8 @@ export class AlumnoTileComponent {
   constructor() {
     // Cuando cambia el stream, asignarlo al elemento <video>
     effect(() => {
-      const s = this.stream();
       const el = this.videoEl()?.nativeElement;
-      if (el && s) {
-        el.srcObject = s;
-        el.play().catch((err: unknown) => {
-          const domErr = err as DOMException;
-          // AbortError es esperado si el stream se detuvo antes de que play() resolviera
-          if (domErr?.name === 'AbortError') {
-            console.info('[AlumnoTile] play() abortado (stream detenido antes de iniciar):', domErr.message);
-          } else if (domErr?.name === 'NotAllowedError') {
-            // Autoplay bloqueado por política del navegador — no es fatal, el video
-            // se reproducirá cuando el usuario interactúe con la página
-            console.warn('[AlumnoTile] Autoplay bloqueado por el navegador (NotAllowedError). El video se reproducirá tras interacción del usuario.');
-          } else {
-            console.error('[AlumnoTile] Error inesperado en video.play():', domErr?.name ?? err);
-          }
-        });
-      } else if (el && !s) {
-        el.srcObject = null;
-      }
+      if (el) playStream(el, this.stream(), '[AlumnoTile]');
     });
   }
 

@@ -1,29 +1,17 @@
-// =============================================================
-// features/docente/services/examenes.service.ts
-//
-// Servicio exclusivo del módulo docente para gestionar exámenes,
-// sus preguntas y opciones de respuesta.
-//
-// Responsabilidades:
-//   - Listar exámenes del maestro autenticado
-//   - Crear / actualizar un examen completo (con preguntas y opciones)
-//   - Cargar un examen completo para edición
-//   - Eliminar un examen (CASCADE borra preguntas y opciones en BD)
-//
-// Patrón de escritura (crear/editar):
-//   La BD no tiene transacciones nativas en el cliente JS de Supabase,
-//   por lo que usamos el siguiente orden para garantizar consistencia:
-//     1. Upsert del examen (insert o update)
-//     2. Delete de preguntas antiguas (CASCADE borra sus opciones)
-//     3. Insert de nuevas preguntas
-//     4. Insert de opciones para cada pregunta
-//
-// RLS activo:
-//   - examenes: maestro_id = auth.uid()
-//   - preguntas / opciones: via JOIN con examenes (maestro_id)
-//
-// IMPORTANTE: Este servicio NUNCA se inyecta en features/estudiante.
-// =============================================================
+/**
+ * Servicio de gestión de exámenes (solo docente).
+ *
+ * Patrón de escritura crear/editar — sin transacciones nativas en Supabase JS:
+ *   1. Upsert del examen
+ *   2. Delete de preguntas antiguas (CASCADE elimina sus opciones)
+ *   3. Insert de nuevas preguntas
+ *   4. Insert de opciones en bulk
+ *
+ * RLS: examenes filtra por maestro_id = auth.uid().
+ *      preguntas/opciones se heredan via JOIN con examenes.
+ *
+ * IMPORTANTE: No inyectar en features/estudiante.
+ */
 
 import { Injectable, inject, signal } from '@angular/core';
 import { SupabaseService } from '../../../core/services/supabase.service';
@@ -33,25 +21,28 @@ import {
   ExamenCompleto,
   PreguntaConOpciones,
   Opcion,
+  SesionResumen,
+  ServiceResult,
 } from '../../../shared/models';
+import { primeroDeArray } from '../../../shared/utils/supabase.utils';
 
 /** Examen con nombre de grupo incluido via JOIN (para la lista de exámenes) */
 export type ExamenConGrupo = Examen & { grupos?: { nombre: string } | null };
 
-/** Payload que el modal emite al padre para iniciar una sesión */
+// Re-export para compatibilidad con imports existentes
+export type { SesionResumen } from '../../../shared/models/index';
+
 export interface IniciarExamenPayload {
   examenId: string;
   grupoId: string;
 }
 
-/** Payload para crear/editar una opción de respuesta */
 export interface OpcionPayload {
   texto: string;
   es_correcta: boolean;
   orden: number;
 }
 
-/** Payload para crear/editar una pregunta con sus opciones */
 export interface PreguntaPayload {
   texto: string;
   tipo: 'opcion_multiple' | 'texto_abierto';
@@ -60,7 +51,6 @@ export interface PreguntaPayload {
   opciones: OpcionPayload[];
 }
 
-/** Payload completo para crear o editar un examen */
 export interface ExamenPayload {
   titulo: string;
   descripcion?: string | null;
@@ -71,31 +61,11 @@ export interface ExamenPayload {
   preguntas: PreguntaPayload[];
 }
 
-/** Resultado estándar de operaciones del servicio */
-interface ServiceResult<T = void> {
-  data: T | null;
-  error: string | null;
-}
-
-/** Resumen de sesión para el historial */
-export interface SesionResumen {
-  id: string;
-  codigo_acceso: string;
-  estado: string;
-  iniciada_en: string | null;
-  finalizada_en: string | null;
-  examen_titulo: string;
-}
-
-// ── Tipos internos para resultados de queries ─────────────────
-
-/** Fila mínima con ID devuelta por Supabase en consultas de sub-entidades */
 interface RowWithId {
   id: string;
 }
 
-/** Fila de sesión devuelta por cargarSesionesRecientes.
- *  Supabase infiere el campo de FK como array; se normaliza con primeroDeArray(). */
+/** Supabase infiere examenes como array aunque sea 1:1 — normalizar con primeroDeArray() */
 interface SesionConExamen {
   id: string;
   codigo_acceso: string;
@@ -105,17 +75,6 @@ interface SesionConExamen {
   examenes: { titulo: string } | { titulo: string }[] | null;
 }
 
-/**
- * Helper seguro: Supabase infiere JOINs de FK como arrays aunque sean 1:1.
- * Retorna el primer elemento si es array, o el valor tal cual si ya es objeto.
- */
-function primeroDeArray<T>(val: T | T[] | null | undefined): T | null {
-  if (val == null) return null;
-  if (Array.isArray(val)) return val[0] ?? null;
-  return val;
-}
-
-/** Error tipado que Supabase puede arrojar (message siempre está presente) */
 interface SupabaseError {
   message: string;
   code?: string;
@@ -127,27 +86,12 @@ export class ExamenesService {
   private readonly supabase = inject(SupabaseService).client;
   private readonly auth = inject(AuthService);
 
-  // ── Estado reactivo ────────────────────────────────────
-
-  /** Lista de exámenes del docente (sin preguntas, solo metadata + nombre de grupo) */
-  readonly examenes = signal<ExamenConGrupo[]>([]);
-
-  /** Examen actualmente en edición (cargado completo con preguntas) */
+  readonly examenes    = signal<ExamenConGrupo[]>([]);
   readonly examenActivo = signal<ExamenCompleto | null>(null);
+  readonly cargando    = signal(false);
+  readonly error       = signal<string | null>(null);
 
-  /** Indica si hay una operación en progreso */
-  readonly cargando = signal(false);
-
-  /** Error global del servicio */
-  readonly error = signal<string | null>(null);
-
-  // ── Métodos públicos ───────────────────────────────────
-
-  /**
-   * Carga todos los exámenes del maestro autenticado.
-   * Solo trae metadata del examen, sin preguntas (más eficiente para la lista).
-   * Para editar un examen, usar cargarExamenCompleto(id).
-   */
+  /** Carga metadata de exámenes (sin preguntas). Para edición usar cargarExamenCompleto(). */
   async cargarExamenes(): Promise<void> {
     this.cargando.set(true);
     this.error.set(null);
@@ -168,13 +112,7 @@ export class ExamenesService {
     }
   }
 
-  /**
-   * Carga un examen completo con todas sus preguntas y opciones.
-   * Se usa al entrar al formulario de edición.
-   * Popula el signal examenActivo.
-   *
-   * @param examenId - UUID del examen a cargar
-   */
+  /** Carga preguntas y opciones del examen. Popula `examenActivo`. */
   async cargarExamenCompleto(examenId: string): Promise<void> {
     this.cargando.set(true);
     this.error.set(null);
@@ -195,7 +133,6 @@ export class ExamenesService {
 
       if (error) throw error;
 
-      // Ordenar opciones por campo `orden` para mostrarlas en el orden correcto
       const examenFormateado: ExamenCompleto = {
         ...data,
         preguntas: (data.preguntas ?? []).map((p: PreguntaConOpciones) => ({
@@ -213,17 +150,7 @@ export class ExamenesService {
     }
   }
 
-  /**
-   * Crea un examen nuevo con sus preguntas y opciones.
-   *
-   * Flujo:
-   *   1. Insert examen → obtener ID
-   *   2. Insert preguntas en bulk → obtener IDs
-   *   3. Insert opciones en bulk asociadas a cada pregunta
-   *
-   * @param payload - Datos completos del examen a crear
-   * @returns ServiceResult con el examen creado
-   */
+
   async crearExamen(payload: ExamenPayload): Promise<ServiceResult<Examen>> {
     this.cargando.set(true);
     this.error.set(null);
@@ -232,7 +159,6 @@ export class ExamenesService {
       const maestroId = this.auth.currentUser()?.id;
       if (!maestroId) throw new Error('No hay sesión activa.');
 
-      // ── 1. Crear examen ──────────────────────────────
       const { data: examen, error: errExamen } = await this.supabase
         .from('examenes')
         .insert({
@@ -248,7 +174,6 @@ export class ExamenesService {
 
       if (errExamen) throw errExamen;
 
-      // ── 2. Crear preguntas en bulk ───────────────────
       if (payload.preguntas.length > 0) {
         await this._insertarPreguntasYOpciones(examen.id, payload.preguntas);
       }
@@ -267,16 +192,11 @@ export class ExamenesService {
 
   /**
    * Actualiza un examen existente.
-   * Estrategia: borrar todas las preguntas antiguas y re-insertar.
-   * Esto simplifica el manejo de cambios en preguntas y opciones.
    *
-   * GUARDRAIL: Si el examen ya tiene sesiones con estado 'activa' o 'finalizada',
-   * se bloquea la edición para proteger la integridad del historial.
-   * Solo se permite editar si todas las sesiones están en 'esperando'
-   * (sesión creada pero aún no iniciada) o si no tiene sesiones.
-   *
-   * @param examenId - UUID del examen a actualizar
-   * @param payload - Nuevos datos del examen
+   * Estrategia: borrar preguntas antiguas + re-insertar (más simple que diff).
+   * GUARDRAIL: bloquea edición si hay sesiones 'activa' o 'finalizada' — protege
+   * integridad del historial. Solo permite editar si todas las sesiones están en
+   * 'esperando' o si no hay sesiones.
    */
   async actualizarExamen(
     examenId: string,
@@ -286,7 +206,7 @@ export class ExamenesService {
     this.error.set(null);
 
     try {
-      // ── 0. Guardrail: verificar si hay sesiones con historial ──
+      // Guardrail: bloquear si hay historial activo/finalizado
       const { data: sesionesConHistorial, error: errGuard } = await this.supabase
         .from('sesiones')
         .select('id')
@@ -305,7 +225,6 @@ export class ExamenesService {
         return { data: null, error: msg };
       }
 
-      // ── 1. Actualizar metadata del examen ────────────
       const { data: examen, error: errExamen } = await this.supabase
         .from('examenes')
         .update({
@@ -321,9 +240,8 @@ export class ExamenesService {
 
       if (errExamen) throw errExamen;
 
-      // ── 2. Borrar respuestas antiguas antes de borrar preguntas ──
-      // (FK: respuestas.pregunta_id → preguntas.id con RESTRICT bloquea el delete)
-      // Ruta A: borrar por pregunta_id directamente
+      // FK respuestas.pregunta_id → preguntas.id es RESTRICT, hay que borrar en orden.
+      // Ruta A: borrar por pregunta_id
       const { data: preguntasActuales } = await this.supabase
         .from('preguntas')
         .select('id')
@@ -337,8 +255,7 @@ export class ExamenesService {
           .in('pregunta_id', preguntaIdsActuales);
       }
 
-      // Ruta B: borrar por sesion_alumno_id (fallback si RLS bloquea ruta A)
-      // Obtenemos sesiones de este examen → sesion_alumnos → respuestas
+      // Ruta B: fallback por sesion_alumno_id si RLS bloquea ruta A
       const { data: sesionesDelExamen } = await this.supabase
         .from('sesiones')
         .select('id')
@@ -360,7 +277,7 @@ export class ExamenesService {
         }
       }
 
-      // ── 3. Borrar preguntas antiguas (CASCADE elimina opciones) ──
+      // CASCADE elimina opciones automáticamente
       const { error: errDelete } = await this.supabase
         .from('preguntas')
         .delete()
@@ -368,7 +285,6 @@ export class ExamenesService {
 
       if (errDelete) throw errDelete;
 
-      // ── 4. Re-insertar preguntas y opciones ──────────
       if (payload.preguntas.length > 0) {
         await this._insertarPreguntasYOpciones(examenId, payload.preguntas);
       }
@@ -386,17 +302,15 @@ export class ExamenesService {
   }
 
   /**
-   * Elimina un examen junto con todas sus sesiones asociadas.
-   * Bug 4: primero elimina sesiones (FK constraint), luego el examen.
-   *
-   * @param examenId - UUID del examen a eliminar
+   * Elimina un examen. Orden de borrado requerido por FK constraints:
+   * respuestas → sesiones → examen (preguntas/opciones por CASCADE).
    */
   async eliminarExamen(examenId: string): Promise<ServiceResult> {
     this.cargando.set(true);
     this.error.set(null);
 
     try {
-      // 1. Borrar respuestas primero (FK: respuestas.pregunta_id → preguntas.id)
+      // 1. Respuestas (FK: respuestas.pregunta_id → preguntas.id)
       const { data: preguntasDelExamen } = await this.supabase
         .from('preguntas')
         .select('id')
@@ -410,7 +324,7 @@ export class ExamenesService {
           .in('pregunta_id', preguntaIds);
       }
 
-      // 2. Eliminar sesiones asociadas (FK bloquea eliminar el examen directamente)
+      // 2. Sesiones (FK bloquea eliminar el examen directamente)
       const { error: errSesiones } = await this.supabase
         .from('sesiones')
         .delete()
@@ -418,7 +332,7 @@ export class ExamenesService {
 
       if (errSesiones) throw errSesiones;
 
-      // 3. Eliminar el examen (CASCADE borra preguntas y opciones)
+      // 3. Examen (CASCADE borra preguntas y opciones)
       const { error } = await this.supabase
         .from('examenes')
         .delete()
@@ -438,10 +352,7 @@ export class ExamenesService {
     }
   }
 
-  /**
-   * Carga el historial de sesiones del maestro.
-   * Bug 6: permite ver sesiones pasadas con enlace a resultados.
-   */
+
   async cargarSesionesRecientes(): Promise<SesionResumen[]> {
     try {
       const maestroId = this.auth.currentUser()?.id;
@@ -467,20 +378,11 @@ export class ExamenesService {
     }
   }
 
-  // ── Métodos privados ───────────────────────────────────
-
-  /**
-   * Helper interno: inserta preguntas y sus opciones en bulk.
-   * Se llama tanto desde crearExamen como actualizarExamen.
-   *
-   * @param examenId - UUID del examen al que pertenecen las preguntas
-   * @param preguntas - Array de payloads de preguntas con opciones
-   */
+  /** Inserta preguntas + opciones en bulk. Usado por crearExamen y actualizarExamen. */
   private async _insertarPreguntasYOpciones(
     examenId: string,
     preguntas: PreguntaPayload[]
   ): Promise<void> {
-    // Insertar todas las preguntas en una sola query
     const preguntasPayload = preguntas.map((p) => ({
       examen_id:  examenId,
       texto:      p.texto,
@@ -495,8 +397,7 @@ export class ExamenesService {
 
     if (errPreguntas) throw errPreguntas;
 
-    // Construir payload de opciones mapeando cada opción al ID de su pregunta
-    // Las preguntas se devuelven en el mismo orden que fueron insertadas
+    // Supabase devuelve las preguntas en el mismo orden que fueron insertadas
     const opcionesPayload: Array<{
       pregunta_id: string;
       texto: string;
@@ -518,7 +419,6 @@ export class ExamenesService {
       });
     });
 
-    // Insertar todas las opciones en una sola query (bulk)
     if (opcionesPayload.length > 0) {
       const { error: errOpciones } = await this.supabase
         .from('opciones')
@@ -528,13 +428,7 @@ export class ExamenesService {
     }
   }
 
-  // ── Storage (imágenes de preguntas) ────────────────────
-
-  /**
-   * Sube un archivo de imagen al bucket `question-images`.
-   * El archivo ya llega optimizado (WebP) desde el componente.
-   * Retorna la URL pública o null si falló.
-   */
+  /** Sube imagen al bucket `question-images` (el componente ya la optimizó a WebP). */
   async subirImagenPregunta(file: File): Promise<string | null> {
     const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'webp';
     const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -555,9 +449,7 @@ export class ExamenesService {
     return data.publicUrl;
   }
 
-  /**
-   * Elimina una imagen del bucket a partir de su URL pública.
-   */
+
   async eliminarImagenPregunta(url: string): Promise<void> {
     const marker = '/question-images/';
     const idx    = url.indexOf(marker);
