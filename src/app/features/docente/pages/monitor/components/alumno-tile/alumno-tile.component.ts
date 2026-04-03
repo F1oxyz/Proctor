@@ -220,10 +220,10 @@ export class AlumnoTileComponent {
   /** Color determinístico para el avatar */
   readonly colorAvatar = computed(() => colorAvatar(this.alumno().alumno_nombre ?? 'X'));
 
-  /** "Navegador Web" o "App de Escritorio" según el peer_id */
-  readonly tipoConexion = computed(() =>
-    this.alumno().peer_id?.startsWith('alumno-')
-      ? 'Navegador Web'
-      : 'App de Escritorio'
-  );
+  /** "Navegador Web", "App de Escritorio" o "—" si aún no hay peer_id */
+  readonly tipoConexion = computed(() => {
+    const pid = this.alumno().peer_id;
+    if (!pid) return '—';
+    return pid.startsWith('alumno-') ? 'Navegador Web' : 'App de Escritorio';
+  });
 }

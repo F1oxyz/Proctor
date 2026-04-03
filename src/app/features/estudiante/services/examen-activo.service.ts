@@ -58,7 +58,12 @@ export interface AlumnoActivo {
   nombre_completo: string;
 }
 
-export interface SesionActiva {
+/**
+ * Datos de la sesión cargada desde la perspectiva del alumno.
+ * Se construye a partir del JOIN sesiones → examenes e incluye
+ * campos del examen (duracion_min, minimo_aprobatorio) aplanados.
+ */
+export interface DatosSesionAlumno {
   id: string;
   examen_id: string;
   examen_titulo: string;
@@ -106,7 +111,7 @@ export class ExamenActivoService {
   /** true cuando Realtime confirmó SUBSCRIBED — indica que el polling no es necesario */
   private _realtimeEstadoActivo = false;
 
-  readonly sesion               = signal<SesionActiva | null>(null);
+  readonly sesion               = signal<DatosSesionAlumno | null>(null);
   readonly alumno               = signal<AlumnoActivo | null>(null);
   readonly listaAlumnos         = signal<AlumnoActivo[]>([]);
   readonly preguntas            = signal<PreguntaActiva[]>([]);

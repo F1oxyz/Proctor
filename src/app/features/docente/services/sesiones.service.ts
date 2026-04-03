@@ -35,8 +35,12 @@ interface SesionAlumnoRaw {
   alumnos: { nombre_completo: string } | { nombre_completo: string }[] | null;
 }
 
-/** Info básica de la sesión activa para el monitor del docente */
-export interface SesionActiva {
+/**
+ * DTO enriquecido con los datos que el panel monitor del docente necesita.
+ * No es la entidad Sesion del modelo: incluye joins (examen_titulo, grupo_nombre)
+ * y datos calculados (total_alumnos). Solo vive en SesionesService.
+ */
+export interface InfoSesionMonitor {
   id: string;
   codigo_acceso: string;
   examen_titulo: string;
@@ -55,7 +59,7 @@ export class SesionesService {
   private readonly supabase = inject(SupabaseService);
   private readonly auth     = inject(AuthService);
 
-  readonly sesionActiva    = signal<SesionActiva | null>(null);
+  readonly infoSesionMonitor = signal<InfoSesionMonitor | null>(null);
   readonly alumnosEnSesion = signal<SesionAlumnoConDatos[]>([]);
 
   readonly cargando = signal(false);
@@ -119,7 +123,7 @@ export class SesionesService {
       return false;
     }
 
-    this.sesionActiva.update((s) => (s ? { ...s, estado: 'activa', iniciada_en } : null));
+    this.infoSesionMonitor.update((s) => (s ? { ...s, estado: 'activa', iniciada_en } : null));
     return true;
   }
 
@@ -164,7 +168,7 @@ export class SesionesService {
       totalAlumnos = count ?? 0;
     }
 
-    this.sesionActiva.set({
+    this.infoSesionMonitor.set({
       id:            row.id,
       codigo_acceso: row.codigo_acceso,
       examen_titulo: examen?.titulo ?? '—',
@@ -219,7 +223,7 @@ export class SesionesService {
   destruir(): void {
     this.desuscribirseDeRealtime();
     this._detenerPolling();
-    this.sesionActiva.set(null);
+    this.infoSesionMonitor.set(null);
     this.alumnosEnSesion.set([]);
     this.error.set(null);
   }
@@ -344,7 +348,7 @@ export class SesionesService {
       porcentaje:        sa.porcentaje,
       total_correctas:   sa.total_correctas,
       total_incorrectas: sa.total_incorrectas,
-      creado_en:         '',   // no incluido en la query; placeholder para el tipo
+      creado_en:         '',   // no incluido en la query; placeholder para satisfacer el tipo
       alumno_nombre:     primeroDeArray(sa.alumnos)?.nombre_completo ?? '—',
     }));
   }

@@ -654,7 +654,7 @@ export class ResultadosComponent implements OnInit {
         porcentaje:        sa.porcentaje,
         total_correctas:   sa.total_correctas,
         total_incorrectas: sa.total_incorrectas,
-        creado_en:         '',
+        creado_en:         '',   // no incluido en la query; placeholder para satisfacer el tipo
         alumno_nombre:     primeroDeArray(sa.alumnos)?.nombre_completo ?? '—',
         total_preguntas:   this.totalPreguntas(), // para calcular sin_cumplir en fila
       })

@@ -4,7 +4,7 @@
  * CAMBIOS:
  *  - Bug 7: timer NO arranca automáticamente. El profesor hace clic en
  *           "Iniciar Examen" en el navbar para arrancar el examen y el timer.
- *  - Bug 10: totalAlumnos pasa el conteo real del grupo (sesionActiva.total_alumnos)
+ *  - Bug 10: totalAlumnos pasa el conteo real del grupo (infoSesionMonitor.total_alumnos)
  *  - Bug 11: soporte para cambio de columnas desde el navbar
  *  - Bug 3: iniciarTemporizador() llama _finalizarSesionPorTiempo() cuando llega a 0
  *  - Bug 6: _configurarTemporizador() calcula tiempo restante desde iniciada_en
@@ -48,11 +48,11 @@ import { playStream } from '../../../../shared/utils/video.utils';
 
       <!-- ── Navbar del monitor ── -->
       <app-monitor-navbar
-        [tituloExamen]="sesiones.sesionActiva()?.examen_titulo ?? ''"
-        [codigoExamen]="sesiones.sesionActiva()?.grupo_nombre ?? ''"
-        [codigoAcceso]="sesiones.sesionActiva()?.codigo_acceso ?? ''"
+        [tituloExamen]="sesiones.infoSesionMonitor()?.examen_titulo ?? '—'"
+        [codigoExamen]="sesiones.infoSesionMonitor()?.grupo_nombre ?? '—'"
+        [codigoAcceso]="sesiones.infoSesionMonitor()?.codigo_acceso ?? ''"
         [alumnosConectados]="alumnosConectados()"
-        [totalAlumnos]="sesiones.sesionActiva()?.total_alumnos ?? 0"
+        [totalAlumnos]="sesiones.infoSesionMonitor()?.total_alumnos ?? 0"
         [segundosRestantes]="segundosRestantes()"
         [examenIniciado]="examenIniciado()"
         (finalizarSesion)="confirmarFinalizacion()"
@@ -73,7 +73,7 @@ import { playStream } from '../../../../shared/utils/video.utils';
               <p class="text-sm font-semibold text-amber-800">Examen en espera</p>
               <p class="text-xs text-amber-600">
                 Los alumnos pueden unirse con el código
-                <span class="font-mono font-bold bg-amber-100 px-1 rounded">{{ sesiones.sesionActiva()?.codigo_acceso }}</span>.
+                <span class="font-mono font-bold bg-amber-100 px-1 rounded">{{ sesiones.infoSesionMonitor()?.codigo_acceso }}</span>.
                 Cuando estés listo, haz clic en <strong>"Iniciar Examen"</strong>.
               </p>
             </div>
@@ -140,7 +140,7 @@ import { playStream } from '../../../../shared/utils/video.utils';
             <p class="text-xs text-slate-400">
               Código de acceso:
               <span class="font-mono font-bold text-slate-700 text-sm bg-slate-100 px-2 py-0.5 rounded ml-1">
-                {{ sesiones.sesionActiva()?.codigo_acceso }}
+                {{ sesiones.infoSesionMonitor()?.codigo_acceso }}
               </span>
             </p>
           </div>
@@ -363,7 +363,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
 
     // Bug 7 + Bug 6: Si la sesión ya estaba 'activa' (profesor recarga la página),
     // restaurar el estado de iniciado calculando el tiempo restante real.
-    if (this.sesiones.sesionActiva()?.estado === 'activa') {
+    if (this.sesiones.infoSesionMonitor()?.estado === 'activa') {
       this.examenIniciado.set(true);
       this._configurarTemporizador();  // Bug 6: usa iniciada_en para calcular restante
       this.iniciarTemporizador();
@@ -383,7 +383,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
    * Delega en calcularSegundosRestantes() — fuente de verdad compartida.
    */
   private _configurarTemporizador(): void {
-    const sesion = this.sesiones.sesionActiva();
+    const sesion = this.sesiones.infoSesionMonitor();
     if (!sesion) return;
     this.segundosRestantes.set(
       calcularSegundosRestantes(sesion.duracion_min, sesion.iniciada_en),
@@ -421,7 +421,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
    */
   private async _finalizarSesionPorTiempo(): Promise<void> {
     if (this.finalizando()) return;
-    const sesionId = this.sesiones.sesionActiva()?.id;
+    const sesionId = this.sesiones.infoSesionMonitor()?.id;
     if (!sesionId) return;
     this.finalizando.set(true);
     const ok = await this.sesiones.finalizarSesion(sesionId);
@@ -434,7 +434,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
 
   /** Bug 7: el profesor inicia el examen manualmente */
   async onIniciarExamen(): Promise<void> {
-    const sesionId = this.sesiones.sesionActiva()?.id;
+    const sesionId = this.sesiones.infoSesionMonitor()?.id;
     if (!sesionId || this.examenIniciado()) return;
 
     const ok = await this.sesiones.iniciarExamenActivo(sesionId);
@@ -455,7 +455,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
   }
 
   async finalizarSesion(): Promise<void> {
-    const sesionId = this.sesiones.sesionActiva()?.id;
+    const sesionId = this.sesiones.infoSesionMonitor()?.id;
     if (!sesionId || this.finalizando()) return;
 
     this.finalizando.set(true);
@@ -480,7 +480,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
   }
 
   sincronizarManual(): void {
-    const sesionId = this.sesiones.sesionActiva()?.id;
+    const sesionId = this.sesiones.infoSesionMonitor()?.id;
     if (sesionId) this.sesiones.iniciarMonitoreo(sesionId);
   }
 
