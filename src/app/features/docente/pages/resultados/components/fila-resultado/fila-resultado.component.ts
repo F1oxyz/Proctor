@@ -19,7 +19,7 @@ import {
   input,
   computed,
 } from '@angular/core';
-import { SesionAlumnoConDatos } from '../../../../../../shared/models/index';
+import { SesionAlumnoResultado } from '../../../../../../shared/models/index';
 import { colorAvatar, getIniciales } from '../../../../../../shared/utils/avatar.utils';
 
 @Component({
@@ -101,8 +101,8 @@ import { colorAvatar, getIniciales } from '../../../../../../shared/utils/avatar
 export class FilaResultadoComponent {
   // ── Inputs ───────────────────────────────────────────────────────
 
-  /** Datos del registro sesion_alumnos enriquecido con el nombre */
-  fila = input.required<SesionAlumnoConDatos>();
+  /** Datos del registro sesion_alumnos enriquecido con nombre y total_preguntas */
+  fila = input.required<SesionAlumnoResultado>();
 
   /** Porcentaje mínimo para considerar aprobado. Default: 60 */
   minimoAprobatorio = input(60);
@@ -133,8 +133,7 @@ export class FilaResultadoComponent {
     const f = this.fila();
     if (f.total_correctas == null && f.total_incorrectas == null) return '—';
     const respondidas = (f.total_correctas ?? 0) + (f.total_incorrectas ?? 0);
-    // total_preguntas viene del join extendido en resultados.service
-    const total = (f as any).total_preguntas ?? respondidas;
+    const total = f.total_preguntas ?? respondidas;
     return Math.max(0, total - respondidas);
   });
 

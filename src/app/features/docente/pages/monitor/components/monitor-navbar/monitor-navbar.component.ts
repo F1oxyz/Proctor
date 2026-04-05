@@ -49,7 +49,7 @@ import {
         <div class="flex-1 min-w-0 text-center hidden md:block">
           <div class="flex items-center justify-center gap-2 flex-wrap">
             <span class="text-xs font-mono font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-              {{ codigoExamen() }}
+              {{ nombreGrupo() }}
             </span>
             <h1 class="text-sm font-bold text-slate-900 truncate max-w-xs">
               {{ tituloExamen() }}
@@ -209,7 +209,8 @@ import {
 export class MonitorNavbarComponent {
   // ── Inputs ───────────────────────────────────────────────────────
   tituloExamen = input('—');
-  codigoExamen = input('—');
+  /** Nombre del grupo al que pertenece la sesión */
+  nombreGrupo = input('—');
   codigoAcceso = input('');
   alumnosConectados = input(0);
   totalAlumnos = input(0);

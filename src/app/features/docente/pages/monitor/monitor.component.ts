@@ -49,7 +49,7 @@ import { playStream } from '../../../../shared/utils/video.utils';
       <!-- ── Navbar del monitor ── -->
       <app-monitor-navbar
         [tituloExamen]="sesiones.infoSesionMonitor()?.examen_titulo ?? '—'"
-        [codigoExamen]="sesiones.infoSesionMonitor()?.grupo_nombre ?? '—'"
+        [nombreGrupo]="sesiones.infoSesionMonitor()?.grupo_nombre ?? '—'"
         [codigoAcceso]="sesiones.infoSesionMonitor()?.codigo_acceso ?? ''"
         [alumnosConectados]="alumnosConectados()"
         [totalAlumnos]="sesiones.infoSesionMonitor()?.total_alumnos ?? 0"
@@ -166,7 +166,7 @@ import { playStream } from '../../../../shared/utils/video.utils';
             </span>
           </div>
           <span class="text-xs text-slate-400 flex items-center gap-1">
-            Última sync: ahora
+            Última sync: {{ ultimaSyncFormateada() }}
             <button
               type="button"
               (click)="sincronizarManual()"
@@ -289,6 +289,9 @@ export class MonitorComponent implements OnInit, OnDestroy {
   /** Bug 11: número de columnas del grid (configurable desde el navbar) */
   readonly columnas = signal<2 | 3 | 4>(4);
 
+  /** Hora de la última sincronización con Supabase (actualizada por Realtime/polling). */
+  readonly ultimaSync = signal<Date | null>(null);
+
   /** Referencia al video de pantalla completa */
   private readonly videoExpandidoEl = viewChild<ElementRef<HTMLVideoElement>>('videoExpandido');
 
@@ -326,6 +329,15 @@ export class MonitorComponent implements OnInit, OnDestroy {
     () => this.peer.streamsPorAlumno().size
   );
 
+  readonly ultimaSyncFormateada = computed(() => {
+    const d = this.ultimaSync();
+    if (!d) return 'nunca';
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    const s = d.getSeconds().toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  });
+
   readonly alumnosActivos = computed(
     () => this.sesiones.alumnosEnSesion()
       .filter((a) => a.estado === 'en_progreso').length
@@ -360,6 +372,7 @@ export class MonitorComponent implements OnInit, OnDestroy {
 
     await this.peer.inicializarComoReceptor(sesionId);
     await this.sesiones.iniciarMonitoreo(sesionId);
+    this.ultimaSync.set(new Date());
 
     // Bug 7 + Bug 6: Si la sesión ya estaba 'activa' (profesor recarga la página),
     // restaurar el estado de iniciado calculando el tiempo restante real.
@@ -481,7 +494,11 @@ export class MonitorComponent implements OnInit, OnDestroy {
 
   sincronizarManual(): void {
     const sesionId = this.sesiones.infoSesionMonitor()?.id;
-    if (sesionId) this.sesiones.iniciarMonitoreo(sesionId);
+    if (sesionId) {
+      void this.sesiones.iniciarMonitoreo(sesionId).then(() => {
+        this.ultimaSync.set(new Date());
+      });
+    }
   }
 
   /** Placeholder para futura notificación push al alumno. No implementado aún. */

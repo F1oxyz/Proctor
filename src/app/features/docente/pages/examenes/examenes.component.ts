@@ -17,7 +17,8 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 
-import { ExamenesService, SesionResumen } from '../../services/examenes.service';
+import { ExamenesService } from '../../services/examenes.service';
+import { SesionResumen } from '../../../../shared/models';
 import { SesionesService } from '../../services/sesiones.service';
 import {
   NavbarComponent,

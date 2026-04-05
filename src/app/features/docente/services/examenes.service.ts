@@ -29,9 +29,6 @@ import { primeroDeArray } from '../../../shared/utils/supabase.utils';
 /** Examen con nombre de grupo incluido via JOIN (para la lista de exámenes) */
 export type ExamenConGrupo = Examen & { grupos?: { nombre: string } | null };
 
-// Re-export para compatibilidad con imports existentes
-export type { SesionResumen } from '../../../shared/models/index';
-
 export interface IniciarExamenPayload {
   examenId: string;
   grupoId: string;

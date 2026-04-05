@@ -45,7 +45,7 @@ import { NavbarComponent } from '../../../../shared/components/navbar/navbar.com
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { FilaResultadoComponent } from './components/fila-resultado/fila-resultado.component';
-import { SesionAlumnoConDatos } from '../../../../shared/models/index';
+import { SesionAlumnoResultado } from '../../../../shared/models/index';
 import { primeroDeArray } from '../../../../shared/utils/supabase.utils';
 
 /** Shape del JOIN sesiones → examenes → grupos en cargarResultados() */
@@ -502,8 +502,8 @@ export class ResultadosComponent implements OnInit {
   /** Info de la sesión para el encabezado */
   readonly sesionInfo = signal<SesionInfo | null>(null);
 
-  /** Filas de la tabla (un registro por alumno) */
-  readonly filas = signal<SesionAlumnoConDatos[]>([]);
+  /** Filas de la tabla (un registro por alumno, con total_preguntas inyectado) */
+  readonly filas = signal<SesionAlumnoResultado[]>([]);
 
   /** Total de preguntas del examen (para calcular sin_cumplir) */
   readonly totalPreguntas = signal(0);
@@ -514,7 +514,7 @@ export class ResultadosComponent implements OnInit {
   // ── Bug 5: Estado del panel de respuestas ────────────────────────
 
   /** Alumno cuyas respuestas se están revisando */
-  readonly alumnoSeleccionado = signal<SesionAlumnoConDatos | null>(null);
+  readonly alumnoSeleccionado = signal<SesionAlumnoResultado | null>(null);
 
   /** Respuestas del alumno seleccionado */
   readonly respuestasAlumno = signal<RespuestaConDatos[]>([]);
@@ -640,14 +640,14 @@ export class ResultadosComponent implements OnInit {
       return;
     }
 
-    // Aplanar el join para exponer alumno_nombre directamente
-    const filasEnriquecidas: SesionAlumnoConDatos[] = (alumnosData ?? []).map(
+    // Aplanar el join para exponer alumno_nombre y total_preguntas directamente
+    const filasEnriquecidas: SesionAlumnoResultado[] = (alumnosData ?? []).map(
       (sa: SesionAlumnoResultadoRaw) => ({
         id:                sa.id,
         sesion_id:         sesionId,
         alumno_id:         sa.alumno_id,
         peer_id:           null,
-        estado:            sa.estado as SesionAlumnoConDatos['estado'],
+        estado:            sa.estado as SesionAlumnoResultado['estado'],
         iniciado_en:       sa.iniciado_en,
         enviado_en:        sa.enviado_en,
         tiempo_usado_min:  sa.tiempo_usado_min,
@@ -670,7 +670,7 @@ export class ResultadosComponent implements OnInit {
    * Abre el panel lateral con las respuestas del alumno seleccionado.
    * @param fila Fila del alumno que se seleccionó
    */
-  async abrirRespuestasAlumno(fila: SesionAlumnoConDatos): Promise<void> {
+  async abrirRespuestasAlumno(fila: SesionAlumnoResultado): Promise<void> {
     this.alumnoSeleccionado.set(fila);
     this.panelAbierto.set(true);
     await this.cargarRespuestasDeAlumno(fila.id);
@@ -787,7 +787,7 @@ export class ResultadosComponent implements OnInit {
       .eq('id', alumno.id);
 
     // Actualizar en el signal alumnoSeleccionado
-    const alumnoActualizado: SesionAlumnoConDatos = {
+    const alumnoActualizado: SesionAlumnoResultado = {
       ...alumno,
       total_correctas: totalCorrectas,
       total_incorrectas: totalIncorrectas,

@@ -80,6 +80,16 @@ export interface SesionAlumnoConDatos extends SesionAlumno {
   alumno_nombre: string;
 }
 
+/**
+ * SesionAlumnoConDatos enriquecida con el total de preguntas del examen.
+ * Se usa únicamente en la pantalla de resultados del docente (RF-05)
+ * para calcular la columna "Sin cumplir" sin necesidad de `as any`.
+ */
+export interface SesionAlumnoResultado extends SesionAlumnoConDatos {
+  /** Total de preguntas del examen. Se inyecta en ResultadosComponent al mapear. */
+  total_preguntas: number;
+}
+
 // ─── SesionResumen ────────────────────────────────────────
 
 /**

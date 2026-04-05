@@ -51,9 +51,6 @@ export interface InfoSesionMonitor {
   total_alumnos: number;  // total de alumnos del grupo (para el contador del navbar)
 }
 
-// Re-export para compatibilidad con imports existentes
-export type { SesionResumen } from '../../../shared/models/index';
-
 @Injectable()
 export class SesionesService {
   private readonly supabase = inject(SupabaseService);
